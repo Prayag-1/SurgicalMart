@@ -1,8 +1,6 @@
 from django.db import models
 
 
-
-
 class Category(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
@@ -33,6 +31,7 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+
 class BulkInquiry(models.Model):
     name = models.CharField(max_length=150)
     email = models.EmailField()
@@ -45,12 +44,22 @@ class BulkInquiry(models.Model):
     def __str__(self):
         return f"Inquiry for {self.product.name} by {self.name}"
 
+
 class Order(models.Model):
+    STATUS_PENDING = "PENDING"
+    STATUS_CONFIRMED = "CONFIRMED"
+    STATUS_PACKED = "PACKED"
+    STATUS_SHIPPED = "SHIPPED"
+    STATUS_DELIVERED = "DELIVERED"
+    STATUS_CANCELLED = "CANCELLED"
+
     STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("processing", "Processing"),
-        ("completed", "Completed"),
-        ("cancelled", "Cancelled"),
+        (STATUS_PENDING, "Pending"),
+        (STATUS_CONFIRMED, "Confirmed"),
+        (STATUS_PACKED, "Packed"),
+        (STATUS_SHIPPED, "Shipped"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_CANCELLED, "Cancelled"),
     ]
 
     full_name = models.CharField(max_length=150)
@@ -60,7 +69,13 @@ class Order(models.Model):
 
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+
+    invoice_pdf = models.FileField(upload_to="invoices/", blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -75,6 +90,9 @@ class OrderItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        verbose_name_plural = "Order Items"
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"

@@ -4,6 +4,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from .utils import generate_invoice_pdf
+
 
 from .models import Category, Product, BulkInquiry, Order, OrderItem
 from .serializers import (
@@ -167,33 +169,19 @@ class CheckoutView(APIView):
         # Clear cart
         cart.clear()
 
-        # ----------------------
-        # SEND ORDER CONFIRMATION EMAIL
-        # ----------------------
-        subject = f"Order Confirmation #{order.id} - Surgical Mart Nepal"
-        message = (
-            f"Dear {full_name},\n\n"
-            f"Thank you for your order!\n"
-            f"Your Order ID is: {order.id}\n\n"
-            f"Total Amount: Rs. {order.total_amount}\n\n"
-            f"Shipping Address:\n{address}\n\n"
-            f"We will contact you soon.\n\n"
-            "Regards,\n"
-            "Surgical Mart Nepal"
-        )
-
-        send_mail(
-            subject,
-            message,
-            None,               # DEFAULT_FROM_EMAIL
-            [email],
-            fail_silently=False,
-        )
+        # Generate invoice PDF and attach
+        invoice_rel_path = generate_invoice_pdf(order)
+        order.invoice_pdf = invoice_rel_path
+        order.save()
 
         return Response(
-            {"message": "Order created successfully.", "order_id": order.id},
+            {
+                "message": "Order created successfully.",
+                "order_id": order.id,
+            },
             status=201,
         )
+
 
 
 # --------------------------------------------------
@@ -203,6 +191,8 @@ class OrderDetailView(APIView):
     def get(self, request, order_id):
         order = get_object_or_404(Order, id=order_id)
         serializer = OrderSerializer(order)
+        serializer = OrderSerializer(order, context={"request": request})
+
         return Response(serializer.data)
 
 
@@ -244,3 +234,4 @@ class OrderTrackingView(APIView):
 
         serializer = OrderSerializer(order)
         return Response(serializer.data)
+
