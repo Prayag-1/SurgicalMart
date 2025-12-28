@@ -49,6 +49,16 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "is_active",
         ]
 
+    def validate_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Price must be greater than or equal to 0.")
+        return value
+
+    def validate_stock(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Stock must be greater than or equal to 0.")
+        return value
+
 
 # --------------------------
 # BULK INQUIRY SERIALIZER

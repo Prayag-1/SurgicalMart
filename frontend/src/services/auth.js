@@ -3,35 +3,13 @@ import { clearTokens } from '../utils/tokenStorage'
 const BASE_URL = 'http://127.0.0.1:8000'
 
 export const login = async (email, password) => {
-  const response = await fetch(`${BASE_URL}/api/admin/login/`, {
+  const response = await fetch(`${BASE_URL}/api/auth/login/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       username: email,
-      password,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}))
-    const detail = errorBody.detail || 'Login failed'
-    throw new Error(detail)
-  }
-
-  const data = await response.json()
-  const { access, refresh } = data
-  return { access, refresh }
-}
-
-export const register = async (email, password) => {
-  const response = await fetch(`${BASE_URL}/api/shop/auth/register/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
       email,
       password,
     }),
@@ -39,11 +17,13 @@ export const register = async (email, password) => {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}))
-    const detail = errorBody.detail || 'Registration failed'
+    const detail = errorBody.detail || 'Invalid credentials'
     throw new Error(detail)
   }
 
-  return response.json()
+  const data = await response.json()
+  const { access, refresh } = data
+  return { access, refresh }
 }
 
 export const logout = () => {

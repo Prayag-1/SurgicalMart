@@ -1,24 +1,57 @@
-from django.contrib.auth import get_user_model
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from django.contrib.auth import authenticate, get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.exceptions import AuthenticationFailed
 
 User = get_user_model()
 
 
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
+class AdminOnlyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Restrict JWT issuance to staff/superusers only.
+    """
 
-    def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
+    def _authenticate(self, identifier: str, password: str):
+        """
+        Allow login via username or email by attempting both.
+        """
+        user = authenticate(username=identifier, password=password)
 
-        if not email or not password:
-            return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if user:
+            return user
 
-        if User.objects.filter(username=email).exists():
-            return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        # Try resolving by email
+        try:
+            user_obj = User.objects.get(email__iexact=identifier)
+        except User.DoesNotExist:
+            return None
 
-        user = User.objects.create_user(username=email, email=email, password=password)
-        return Response({"id": user.id, "email": user.email}, status=status.HTTP_201_CREATED)
+        return authenticate(username=user_obj.get_username(), password=password)
+
+    def validate(self, attrs):
+        identifier = attrs.get(self.username_field) or attrs.get("email")
+        password = attrs.get("password")
+
+        if not identifier or not password:
+            raise AuthenticationFailed("Invalid credentials", code="invalid_credentials")
+
+        user = self._authenticate(identifier, password)
+        if not user:
+            raise AuthenticationFailed("Invalid credentials", code="invalid_credentials")
+
+        if not user.is_active:
+            raise AuthenticationFailed("Admin account inactive.", code="inactive_admin")
+
+        # Only allow admin users to obtain tokens
+        if not user.is_staff:
+            raise AuthenticationFailed("Admin access required.", code="admin_only")
+
+        refresh = self.get_token(user)
+        return {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+        }
+
+
+class AdminTokenObtainPairView(TokenObtainPairView):
+    serializer_class = AdminOnlyTokenObtainPairSerializer

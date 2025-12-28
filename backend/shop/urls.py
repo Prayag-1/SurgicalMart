@@ -13,29 +13,11 @@ from .views import (
     CartRemoveView,
     CartClearView,
     CheckoutView,
-    OrderListView,
 )
-
-# Admin views
-from .views_admin import AdminOrderViewSet, AdminProductViewSet
-from .auth_views import RegisterView
-
-
-# -------------------------------
-# ADMIN ROUTER
-# -------------------------------
-router = DefaultRouter()
-
-router.register("admin/orders", AdminOrderViewSet, basename="admin-orders")
-router.register("admin/products", AdminProductViewSet, basename="admin-products")
-
-
-
 # -------------------------------
 # CUSTOMER ROUTES
 # -------------------------------
 urlpatterns = [
-    path("auth/register/", RegisterView.as_view(), name="register"),
     path("categories/", CategoryListView.as_view(), name="category-list"),
     path("products/", ProductListView.as_view(), name="product-list"),
     path("products/<slug:slug>/", ProductDetailView.as_view(), name="product-detail"),
@@ -49,11 +31,4 @@ urlpatterns = [
     path("cart/clear/", CartClearView.as_view(), name="cart-clear"),
 
     path("checkout/", CheckoutView.as_view(), name="checkout"),
-    path("orders/", OrderListView.as_view(), name="order-list"),
 ]
-
-
-# -------------------------------
-# ADMIN ROUTES via router
-# -------------------------------
-urlpatterns += router.urls

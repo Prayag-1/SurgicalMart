@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import '../App.css'
-import { login, register } from '../services/auth'
+import { login } from '../services/auth'
 import { setTokens } from '../utils/tokenStorage'
 
 const features = [
@@ -19,7 +19,6 @@ const features = [
 ]
 
 function AuthPage({ onAuthSuccess }) {
-  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,27 +32,15 @@ function AuthPage({ onAuthSuccess }) {
     setLoading(true)
 
     try {
-      if (mode === 'login') {
-        const tokens = await login(email, password)
-        setTokens(tokens)
-        setMessage('Logged in')
-        onAuthSuccess?.()
-      } else {
-        await register(email, password)
-        setMessage('Account created. Please sign in.')
-        setMode('login')
-      }
+      const tokens = await login(email, password)
+      setTokens(tokens)
+      setMessage('Logged in as admin')
+      onAuthSuccess?.()
     } catch (err) {
-      setError(err.message || 'Request failed')
+      setError(err.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
-  }
-
-  const toggleMode = () => {
-    setError('')
-    setMessage('')
-    setMode(mode === 'login' ? 'register' : 'login')
   }
 
   return (
@@ -87,9 +74,10 @@ function AuthPage({ onAuthSuccess }) {
             <span className="dot" />
             Surgical Mart - Admin Portal
           </div>
-          <h2>{mode === 'login' ? 'Sign in to continue' : 'Create an account'}</h2>
+          <h2>Admin sign in</h2>
           <p className="support">
-            Access your dashboard, manage orders, and keep your surgical supply chain moving.
+            Admin-only access. Customers do not log in and there is no signup. Use your admin
+            credentials from Django.
           </p>
 
           <form className="auth-form" onSubmit={handleSubmit}>
@@ -130,23 +118,9 @@ function AuthPage({ onAuthSuccess }) {
             {loading ? <p className="support">Processing...</p> : null}
 
             <button type="submit" className="primary-btn" disabled={loading}>
-              {mode === 'login' ? 'Sign in' : 'Create account'}
+              Sign in
             </button>
           </form>
-
-          <p className="switch-auth">
-            {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <a
-              href="#"
-              className="link-quiet"
-              onClick={(event) => {
-                event.preventDefault()
-                toggleMode()
-              }}
-            >
-              {mode === 'login' ? 'Create an account' : 'Sign in'}
-            </a>
-          </p>
         </section>
       </div>
     </div>

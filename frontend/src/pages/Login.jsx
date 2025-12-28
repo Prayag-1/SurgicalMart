@@ -5,7 +5,7 @@ import { setTokens } from '../utils/tokenStorage'
 
 const features = [
   {
-    title: 'Fast order delivery ',
+    title: 'Fast order delivery',
     description: 'Delivery inside the valley on the same day',
   },
   {
@@ -32,9 +32,9 @@ function Login() {
     try {
       const tokens = await login(email, password)
       setTokens(tokens)
-      window.location.assign('/')
+      window.location.assign('/admin/dashboard')
     } catch (err) {
-      setError(err.message || 'Login failed')
+      setError(err.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
@@ -69,12 +69,10 @@ function Login() {
         <section className="form-panel">
           <div className="pill">
             <span className="dot" />
-            Surgical Mart Г?" Admin Portal
+            Surgical Mart — Admin Portal
           </div>
-          <h2>Sign in to continue</h2>
-          <p className="support">
-            Access your dashboard, manage orders, and keep your surgical supply chain moving.
-          </p>
+          <h2>Admin sign in</h2>
+          <p className="support">Admins only. Customers never create accounts or log in.</p>
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <label className="field">
@@ -92,7 +90,7 @@ function Login() {
               <span>Password *</span>
               <input
                 type="password"
-                placeholder="Г?ЫГ?ЫГ?ЫГ?ЫГ?ЫГ?ЫГ?ЫГ?ЫГ?ЫГ?Ы"
+                placeholder="********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -116,13 +114,6 @@ function Login() {
               Sign in
             </button>
           </form>
-
-          <p className="switch-auth">
-            DonГ?Tt have an account?{' '}
-            <a href="#" className="link-quiet">
-              Create an account
-            </a>
-          </p>
         </section>
       </div>
     </div>
@@ -130,4 +121,3 @@ function Login() {
 }
 
 export default Login
-
