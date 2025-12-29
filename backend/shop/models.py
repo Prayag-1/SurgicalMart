@@ -1,4 +1,8 @@
 from django.db import models
+from django.db.models import Index
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class Category(models.Model):
@@ -30,6 +34,14 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        indexes = [
+            Index(fields=["is_active"]),
+            Index(fields=["stock"]),
+            Index(fields=["category"]),
+            Index(fields=["created_at"]),
+        ]
 
 
 class BulkInquiry(models.Model):
@@ -77,11 +89,31 @@ class Order(models.Model):
 
     invoice_pdf = models.FileField(upload_to="invoices/", blank=True, null=True)
 
+    stock_adjusted = models.BooleanField(default=False)
+    admin_note = models.TextField(blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Order #{self.id} - {self.full_name}"
+
+    class Meta:
+        indexes = [
+            Index(fields=["status"]),
+            Index(fields=["created_at"]),
+        ]
+
+
+class OrderStatusLog(models.Model):
+    order = models.ForeignKey(Order, related_name="status_logs", on_delete=models.CASCADE)
+    previous_status = models.CharField(max_length=20)
+    new_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
 
 
 class OrderItem(models.Model):

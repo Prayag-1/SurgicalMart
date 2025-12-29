@@ -8,9 +8,10 @@ from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 
-from .models import Order, Product
+from .models import Order, Product, OrderStatusLog
 from .serializers import (
     OrderSerializer,
+    AdminOrderSerializer,
     OrderStatusUpdateSerializer,
     ProductSerializer,
     ProductWriteSerializer,
@@ -23,7 +24,7 @@ from .permissions import IsAdminUser
 # -------------------------------
 class AdminOrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().order_by("-created_at")
-    serializer_class = OrderSerializer
+    serializer_class = AdminOrderSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
     http_method_names = ["get", "patch", "head", "options"]
@@ -31,7 +32,13 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="status")
     @transaction.atomic
     def update_status(self, request, pk=None):
-        order = self.get_object()
+        # Lock order row to prevent concurrent updates
+        order = (
+            Order.objects.select_for_update()
+            .select_related()
+            .prefetch_related("items__product")
+            .get(pk=pk)
+        )
         old_status = order.status
 
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
@@ -40,7 +47,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         new_status = serializer.validated_data["status"]
 
         if new_status == old_status:
-            return Response(OrderSerializer(order, context={"request": request}).data)
+            return Response(AdminOrderSerializer(order, context={"request": request}).data)
 
         allowed_transitions = {
             Order.STATUS_PENDING: {Order.STATUS_CONFIRMED, Order.STATUS_CANCELLED},
@@ -57,19 +64,31 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Inventory adjustments
+        # Inventory adjustments with idempotency and locking
         if new_status == Order.STATUS_CONFIRMED and old_status == Order.STATUS_PENDING:
-            # Reduce stock on confirmation
-            for item in order.items.select_related("product"):
-                if item.product.stock < item.quantity:
+            if order.stock_adjusted:
+                # Already deducted; treat as idempotent
+                serializer.save()
+                return Response(OrderSerializer(order, context={"request": request}).data)
+
+            # Lock product rows and validate stock
+            product_ids = [item.product_id for item in order.items.all()]
+            products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
+
+            for item in order.items.all():
+                product = products.get(item.product_id)
+                if product.stock < item.quantity:
                     return Response(
-                        {"detail": f"Not enough stock for {item.product.name}"},
+                        {"detail": f"Not enough stock for {product.name}"},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-            for item in order.items.select_related("product"):
-                product = item.product
+
+            for item in order.items.all():
+                product = products.get(item.product_id)
                 product.stock -= item.quantity
                 product.save(update_fields=["stock"])
+
+            order.stock_adjusted = True
 
         if new_status == Order.STATUS_CANCELLED:
             if old_status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
@@ -77,15 +96,28 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                     {"detail": "Cancellation is only allowed before shipment."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            # Restore stock only if it was previously deducted
-            if old_status != Order.STATUS_PENDING:
-                for item in order.items.select_related("product"):
-                    product = item.product
+
+            if order.stock_adjusted:
+                product_ids = [item.product_id for item in order.items.all()]
+                products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
+
+                for item in order.items.all():
+                    product = products.get(item.product_id)
                     product.stock += item.quantity
                     product.save(update_fields=["stock"])
 
+                order.stock_adjusted = False
+
         serializer.save()
-        return Response(OrderSerializer(order, context={"request": request}).data)
+
+        OrderStatusLog.objects.create(
+            order=order,
+            previous_status=old_status,
+            new_status=new_status,
+            changed_by=request.user if request.user.is_authenticated else None,
+        )
+
+        return Response(AdminOrderSerializer(order, context={"request": request}).data)
 
 
 # -------------------------------

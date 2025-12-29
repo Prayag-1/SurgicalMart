@@ -4,7 +4,8 @@ from .models import (
     Product,
     BulkInquiry,
     Order,
-    OrderItem
+    OrderItem,
+    OrderStatusLog,
 )
 
 
@@ -115,6 +116,32 @@ class OrderSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url)
 
         return url
+
+
+# --------------------------
+# ORDER STATUS LOG SERIALIZER (ADMIN)
+# --------------------------
+class OrderStatusLogSerializer(serializers.ModelSerializer):
+    changed_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderStatusLog
+        fields = ["id", "previous_status", "new_status", "changed_by", "created_at"]
+
+    def get_changed_by(self, obj):
+        if obj.changed_by:
+            return {"id": obj.changed_by.id, "username": obj.changed_by.get_username(), "email": obj.changed_by.email}
+        return None
+
+
+# --------------------------
+# ADMIN ORDER SERIALIZER
+# --------------------------
+class AdminOrderSerializer(OrderSerializer):
+    status_logs = OrderStatusLogSerializer(many=True, read_only=True)
+
+    class Meta(OrderSerializer.Meta):
+        fields = OrderSerializer.Meta.fields + ["admin_note", "status_logs"]
 
 
 # --------------------------
