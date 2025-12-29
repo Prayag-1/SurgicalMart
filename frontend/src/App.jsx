@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AuthPage from './pages/AuthPage'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminProductsList from './pages/AdminProductsList'
+import AdminProductEdit from './pages/AdminProductEdit'
 import OrdersList from './pages/OrdersList'
 import OrderDetail from './pages/OrderDetail'
 import { isAuthenticated } from './utils/tokenStorage'
@@ -18,8 +20,6 @@ const CheckoutPage = () => (
     Checkout (public) — customers provide full name, email, phone, and address; they are not users.
   </div>
 )
-
-const AdminProducts = () => <div style={{ padding: 24 }}>Admin Products (protected)</div>
 
 // -------------------------------
 // ProtectedRoute helper for admin-only routes
@@ -98,7 +98,15 @@ function App() {
           path="/admin/products"
           element={
             <ProtectedRoute>
-              <AdminProducts />
+              <AdminProductsList />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/products/:id"
+          element={
+            <ProtectedRoute>
+              <AdminProductEdit />
             </ProtectedRoute>
           }
         />
