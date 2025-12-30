@@ -74,6 +74,12 @@ function AdminDashboard() {
           <Link to="/admin/products" style={buttonLinkSecondary}>
             View products
           </Link>
+          <Link to="/admin/categories" style={buttonLinkSecondary}>
+            Categories
+          </Link>
+          <Link to="/admin/brands" style={buttonLinkSecondary}>
+            Brands
+          </Link>
         </div>
       </div>
 

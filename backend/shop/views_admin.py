@@ -4,19 +4,25 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.db import transaction
+from rest_framework.exceptions import ValidationError
 from django.db.models import Count
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from .models import Order, Product, OrderStatusLog
+from .models import Order, Product, OrderAdminNote, Category, Brand
 from .serializers import (
-    OrderSerializer,
     AdminOrderSerializer,
-    OrderStatusUpdateSerializer,
     ProductSerializer,
     ProductWriteSerializer,
+    OrderAdminNoteSerializer,
+    OrderStatusAuditLogSerializer,
+    CategorySerializer,
+    CategoryWriteSerializer,
+    BrandSerializer,
+    BrandWriteSerializer,
 )
 from .permissions import IsAdminUser
+from .services import change_order_status, ALLOWED_ORDER_TRANSITIONS
 
 
 # -------------------------------
@@ -27,97 +33,145 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     serializer_class = AdminOrderSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
-    @action(detail=True, methods=["patch"], url_path="status")
-    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @action(detail=True, methods=["post"], url_path="status")
     def update_status(self, request, pk=None):
-        # Lock order row to prevent concurrent updates
-        order = (
-            Order.objects.select_for_update()
-            .select_related()
-            .prefetch_related("items__product")
-            .get(pk=pk)
+        to_status = request.data.get("to_status")
+        reason = request.data.get("reason")
+        meta = request.data.get("meta")
+
+        if not to_status:
+            return Response({"detail": "to_status is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = change_order_status(
+                order_id=pk,
+                to_status=to_status,
+                actor=request.user,
+                reason=reason,
+                meta=meta,
+            )
+        except Order.DoesNotExist:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AdminOrderSerializer(order, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get", "post"], url_path="notes")
+    def notes(self, request, pk=None):
+        order = self.get_object()
+
+        if request.method.lower() == "get":
+            pinned_first = request.query_params.get("pinned_first", "true").lower() != "false"
+            notes_qs = order.admin_notes.all()
+            if pinned_first:
+                notes_qs = notes_qs.order_by("-is_pinned", "-created_at")
+            else:
+                notes_qs = notes_qs.order_by("-created_at")
+
+            serializer = OrderAdminNoteSerializer(notes_qs, many=True)
+            return Response(serializer.data)
+
+        serializer = OrderAdminNoteSerializer(
+            data=request.data,
+            context={"order": order, "author": request.user},
         )
-        old_status = order.status
-
-        serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        note = serializer.save()
+        return Response(OrderAdminNoteSerializer(note).data, status=status.HTTP_201_CREATED)
 
-        new_status = serializer.validated_data["status"]
+    @action(detail=True, methods=["patch", "delete"], url_path=r"notes/(?P<note_id>[^/.]+)")
+    def note_detail(self, request, pk=None, note_id=None):
+        order = self.get_object()
+        note = get_object_or_404(OrderAdminNote, pk=note_id, order=order)
 
-        if new_status == old_status:
-            return Response(AdminOrderSerializer(order, context={"request": request}).data)
+        if request.method.lower() == "delete":
+            note.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
-        allowed_transitions = {
-            Order.STATUS_PENDING: {Order.STATUS_CONFIRMED, Order.STATUS_CANCELLED},
-            Order.STATUS_CONFIRMED: {Order.STATUS_PACKED, Order.STATUS_CANCELLED},
-            Order.STATUS_PACKED: {Order.STATUS_SHIPPED, Order.STATUS_CANCELLED},
-            Order.STATUS_SHIPPED: {Order.STATUS_DELIVERED},
-            Order.STATUS_DELIVERED: set(),
-            Order.STATUS_CANCELLED: set(),
-        }
+        serializer = OrderAdminNoteSerializer(note, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(OrderAdminNoteSerializer(note).data)
 
-        if new_status not in allowed_transitions.get(old_status, set()):
-            return Response(
-                {"detail": f"Transition from {old_status} to {new_status} is not allowed."},
-                status=status.HTTP_400_BAD_REQUEST,
+    @action(detail=True, methods=["get"], url_path="status-audits")
+    def status_audits(self, request, pk=None):
+        order = self.get_object()
+        audits = order.status_audits.all().order_by("-created_at")
+        serializer = OrderStatusAuditLogSerializer(audits, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="timeline")
+    def timeline(self, request, pk=None):
+        order = self.get_object()
+        limit_param = request.query_params.get("limit")
+        try:
+            limit = int(limit_param) if limit_param else 100
+        except (TypeError, ValueError):
+            return Response({"detail": "limit must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        limit = max(1, min(limit, 200))
+
+        audits = list(
+            order.status_audits.select_related("actor")
+            .order_by("-created_at")[:limit]
+        )
+        notes = list(
+            order.admin_notes.select_related("author")
+            .order_by("-created_at")[:limit]
+        )
+
+        events = []
+
+        for audit in audits:
+            events.append(
+                {
+                    "id": f"audit-{audit.id}",
+                    "event_type": "status_change",
+                    "created_at": audit.created_at,
+                    "actor_email": audit.actor_email_snapshot or (audit.actor.email if audit.actor else None),
+                    "from_status": audit.from_status,
+                    "to_status": audit.to_status,
+                    "reason": audit.reason,
+                }
             )
 
-        # Inventory adjustments with idempotency and locking
-        if new_status == Order.STATUS_CONFIRMED and old_status == Order.STATUS_PENDING:
-            if order.stock_adjusted:
-                # Already deducted; treat as idempotent
-                serializer.save()
-                return Response(OrderSerializer(order, context={"request": request}).data)
+        for note in notes:
+            events.append(
+                {
+                    "id": f"note-{note.id}",
+                    "event_type": "note",
+                    "created_at": note.created_at,
+                    "actor_email": note.author_email_snapshot or (note.author.email if note.author else None),
+                    "note": note.note,
+                    "is_pinned": note.is_pinned,
+                }
+            )
 
-            # Lock product rows and validate stock
-            product_ids = [item.product_id for item in order.items.all()]
-            products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
+        events.sort(key=lambda item: item["created_at"], reverse=True)
+        events = events[:limit]
 
-            for item in order.items.all():
-                product = products.get(item.product_id)
-                if product.stock < item.quantity:
-                    return Response(
-                        {"detail": f"Not enough stock for {product.name}"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+        return Response(events)
 
-            for item in order.items.all():
-                product = products.get(item.product_id)
-                product.stock -= item.quantity
-                product.save(update_fields=["stock"])
-
-            order.stock_adjusted = True
-
-        if new_status == Order.STATUS_CANCELLED:
-            if old_status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
-                return Response(
-                    {"detail": "Cancellation is only allowed before shipment."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if order.stock_adjusted:
-                product_ids = [item.product_id for item in order.items.all()]
-                products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
-
-                for item in order.items.all():
-                    product = products.get(item.product_id)
-                    product.stock += item.quantity
-                    product.save(update_fields=["stock"])
-
-                order.stock_adjusted = False
-
-        serializer.save()
-
-        OrderStatusLog.objects.create(
-            order=order,
-            previous_status=old_status,
-            new_status=new_status,
-            changed_by=request.user if request.user.is_authenticated else None,
+    @action(detail=True, methods=["get"], url_path="allowed-statuses")
+    def allowed_statuses(self, request, pk=None):
+        order = self.get_object()
+        allowed = ALLOWED_ORDER_TRANSITIONS.get(order.status, set())
+        return Response(
+            {
+                "current_status": order.status,
+                "allowed_statuses": sorted(list(allowed)),
+            }
         )
-
-        return Response(AdminOrderSerializer(order, context={"request": request}).data)
 
 
 # -------------------------------
@@ -214,3 +268,68 @@ class AdminDashboardView(APIView):
                 "recent_products": recent_products,
             }
         )
+
+
+# -------------------------------
+# ADMIN CATEGORY MANAGEMENT
+# -------------------------------
+class CategoryAdminViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all().select_related("parent").order_by("name")
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_serializer_class(self):
+        if self.action in ["create", "update", "partial_update"]:
+            return CategoryWriteSerializer
+        return CategorySerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        parent = self.request.query_params.get("parent")
+        if parent is not None:
+            if parent == "":
+                qs = qs.filter(parent__isnull=True)
+            else:
+                qs = qs.filter(parent_id=parent)
+        return qs
+
+    @action(detail=False, methods=["get"], url_path="tree")
+    def tree(self, request):
+        categories = list(
+            Category.objects.select_related("parent").order_by("name")
+        )
+        by_parent = {}
+        for cat in categories:
+            by_parent.setdefault(cat.parent_id, []).append(cat)
+
+        def build_nodes(parent_id):
+            nodes = []
+            for cat in by_parent.get(parent_id, []):
+                nodes.append(
+                    {
+                        "id": cat.id,
+                        "name": cat.name,
+                        "slug": cat.slug,
+                        "seo_title": cat.seo_title,
+                        "seo_description": cat.seo_description,
+                        "seo_keywords": cat.seo_keywords,
+                        "children": build_nodes(cat.id),
+                    }
+                )
+            return nodes
+
+        return Response(build_nodes(None))
+
+
+# -------------------------------
+# ADMIN BRAND MANAGEMENT
+# -------------------------------
+class BrandAdminViewSet(viewsets.ModelViewSet):
+    queryset = Brand.objects.all().order_by("name")
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_serializer_class(self):
+        if self.action in ["create", "update", "partial_update"]:
+            return BrandWriteSerializer
+        return BrandSerializer

@@ -17,7 +17,9 @@ const handleResponse = async (response) => {
 
   if (!response.ok) {
     const detail = payload.detail || 'Unable to complete the request'
-    throw new Error(detail)
+    const err = new Error(detail)
+    err.fields = payload
+    throw err
   }
 
   return payload

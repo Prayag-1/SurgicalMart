@@ -4,6 +4,8 @@ import AuthPage from './pages/AuthPage'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminProductsList from './pages/AdminProductsList'
 import AdminProductEdit from './pages/AdminProductEdit'
+import AdminCategories from './pages/AdminCategories'
+import AdminBrands from './pages/AdminBrands'
 import OrdersList from './pages/OrdersList'
 import OrderDetail from './pages/OrderDetail'
 import { isAuthenticated } from './utils/tokenStorage'
@@ -107,6 +109,22 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminProductEdit />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <ProtectedRoute>
+              <AdminCategories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/brands"
+          element={
+            <ProtectedRoute>
+              <AdminBrands />
             </ProtectedRoute>
           }
         />

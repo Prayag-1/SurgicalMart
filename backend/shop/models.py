@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Index
+from django.db.models.functions import Lower
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -9,10 +10,44 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.CASCADE)
+    seo_title = models.CharField(max_length=255, blank=True)
+    seo_description = models.TextField(blank=True)
+    seo_keywords = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "Categories"
+        indexes = [
+            Index(fields=["slug"]),
+            Index(fields=["parent"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(Lower("slug"), name="category_slug_ci_unique"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Brand(models.Model):
+    name = models.CharField(max_length=150)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    logo = models.ImageField(upload_to="brands/", blank=True, null=True)
+    seo_title = models.CharField(max_length=255, blank=True)
+    seo_description = models.TextField(blank=True)
+    seo_keywords = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            Index(fields=["slug"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(Lower("slug"), name="brand_slug_ci_unique"),
+        ]
 
     def __str__(self):
         return self.name
@@ -22,6 +57,7 @@ class Product(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
+    brand = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.SET_NULL, related_name="products")
     short_description = models.CharField(max_length=255, blank=True)
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -30,6 +66,9 @@ class Product(models.Model):
     image = models.ImageField(upload_to="products/", blank=True, null=True)
     is_featured = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    seo_title = models.CharField(max_length=255, blank=True)
+    seo_description = models.TextField(blank=True)
+    seo_keywords = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -114,6 +153,51 @@ class OrderStatusLog(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class OrderStatusAuditLog(models.Model):
+    order = models.ForeignKey(Order, related_name="status_audits", on_delete=models.CASCADE)
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="order_status_audits")
+    actor_email_snapshot = models.EmailField(blank=True)
+    from_status = models.CharField(max_length=20, choices=Order.STATUS_CHOICES)
+    to_status = models.CharField(max_length=20, choices=Order.STATUS_CHOICES)
+    reason = models.TextField(blank=True)
+    meta = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["order", "created_at"]),
+            Index(fields=["from_status"]),
+            Index(fields=["to_status"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=~models.Q(from_status=models.F("to_status")),
+                name="order_status_audit_transition_change",
+            )
+        ]
+
+
+class OrderAdminNote(models.Model):
+    order = models.ForeignKey(Order, related_name="admin_notes", on_delete=models.CASCADE)
+    author = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="order_admin_notes")
+    author_email_snapshot = models.EmailField(blank=True)
+    note = models.TextField()
+    is_pinned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["order", "created_at"]),
+            Index(fields=["order", "is_pinned", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Note for Order #{self.order_id}"
 
 
 class OrderItem(models.Model):

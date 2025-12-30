@@ -5,7 +5,9 @@ from .models import (
     BulkInquiry,
     Order,
     OrderItem,
-    OrderStatusLog,
+    OrderStatusAuditLog,
+    OrderAdminNote,
+    Brand,
 )
 
 
@@ -13,9 +15,78 @@ from .models import (
 # CATEGORY SERIALIZER
 # --------------------------
 class CategorySerializer(serializers.ModelSerializer):
+    parent = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Category
         fields = "__all__"
+
+
+class CategoryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "parent",
+            "seo_title",
+            "seo_description",
+            "seo_keywords",
+        ]
+
+    def validate_slug(self, value):
+        qs = Category.objects.all()
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.filter(slug__iexact=value).exists():
+            raise serializers.ValidationError("Slug must be unique.")
+        return value
+
+    def validate_parent(self, value):
+        if value and self.instance and value.pk == self.instance.pk:
+            raise serializers.ValidationError("Parent cannot be self.")
+        return value
+
+
+class BrandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = "__all__"
+
+
+class BrandWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "logo",
+            "seo_title",
+            "seo_description",
+            "seo_keywords",
+        ]
+
+    def validate_slug(self, value):
+        qs = Brand.objects.all()
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.filter(slug__iexact=value).exists():
+            raise serializers.ValidationError("Slug must be unique.")
+        return value
+
+    def validate_logo(self, value):
+        if value:
+            content_type = getattr(value, "content_type", "")
+            if content_type and not content_type.startswith("image/"):
+                raise serializers.ValidationError("Logo must be an image.")
+            size = getattr(value, "size", 0)
+            if size and size > 2 * 1024 * 1024:
+                raise serializers.ValidationError("Logo must be smaller than 2MB.")
+        return value
 
 
 # --------------------------
@@ -23,10 +94,16 @@ class CategorySerializer(serializers.ModelSerializer):
 # --------------------------
 class ProductSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
+    brand = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = "__all__"
+
+    def get_brand(self, obj):
+        if obj.brand:
+            return {"id": obj.brand.id, "name": obj.brand.name, "slug": obj.brand.slug}
+        return None
 
 
 # --------------------------
@@ -40,6 +117,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "category",
+            "brand",
             "short_description",
             "description",
             "price",
@@ -48,6 +126,9 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "image",
             "is_featured",
             "is_active",
+            "seo_title",
+            "seo_description",
+            "seo_keywords",
         ]
 
     def validate_price(self, value):
@@ -119,35 +200,107 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 # --------------------------
-# ORDER STATUS LOG SERIALIZER (ADMIN)
-# --------------------------
-class OrderStatusLogSerializer(serializers.ModelSerializer):
-    changed_by = serializers.SerializerMethodField()
-
-    class Meta:
-        model = OrderStatusLog
-        fields = ["id", "previous_status", "new_status", "changed_by", "created_at"]
-
-    def get_changed_by(self, obj):
-        if obj.changed_by:
-            return {"id": obj.changed_by.id, "username": obj.changed_by.get_username(), "email": obj.changed_by.email}
-        return None
-
-
-# --------------------------
 # ADMIN ORDER SERIALIZER
 # --------------------------
 class AdminOrderSerializer(OrderSerializer):
-    status_logs = OrderStatusLogSerializer(many=True, read_only=True)
+    status_logs = serializers.SerializerMethodField()
 
     class Meta(OrderSerializer.Meta):
         fields = OrderSerializer.Meta.fields + ["admin_note", "status_logs"]
 
+    def get_status_logs(self, obj):
+        audits = obj.status_audits.all()
+        return OrderStatusAuditLogSerializer(audits, many=True).data
 
-# --------------------------
-# ORDER STATUS UPDATE (ADMIN)
-# --------------------------
-class OrderStatusUpdateSerializer(serializers.ModelSerializer):
+
+class OrderStatusAuditLogSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    actor_email = serializers.SerializerMethodField()
+
     class Meta:
-        model = Order
-        fields = ["status"]
+        model = OrderStatusAuditLog
+        fields = [
+            "id",
+            "from_status",
+            "to_status",
+            "actor",
+            "actor_email",
+            "reason",
+            "meta",
+            "created_at",
+        ]
+
+    def get_actor(self, obj):
+        if obj.actor:
+            return {
+                "id": obj.actor.id,
+                "username": obj.actor.get_username(),
+                "email": obj.actor.email,
+            }
+        return None
+
+    def get_actor_email(self, obj):
+        if obj.actor_email_snapshot:
+            return obj.actor_email_snapshot
+        if obj.actor:
+            return obj.actor.email
+        return None
+
+
+class OrderAdminNoteSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField()
+    author_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderAdminNote
+        fields = [
+            "id",
+            "note",
+            "is_pinned",
+            "author",
+            "author_email",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "author",
+            "author_email",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_author(self, obj):
+        if obj.author:
+            return {
+                "id": obj.author.id,
+                "username": obj.author.get_username(),
+                "email": obj.author.email,
+            }
+        return None
+
+    def get_author_email(self, obj):
+        if obj.author_email_snapshot:
+            return obj.author_email_snapshot
+        if obj.author:
+            return obj.author.email
+        return None
+
+    def create(self, validated_data):
+        order = self.context["order"]
+        author = self.context.get("author")
+
+        validated_data["order"] = order
+
+        if author and getattr(author, "is_authenticated", False):
+            validated_data["author"] = author
+            validated_data["author_email_snapshot"] = author.email or ""
+        else:
+            validated_data["author_email_snapshot"] = ""
+
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("order", None)
+        validated_data.pop("author", None)
+        validated_data.pop("author_email_snapshot", None)
+        return super().update(instance, validated_data)
