@@ -111,7 +111,7 @@ function AdminBrands() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Brands</h2>
           <Link to="/admin/dashboard" style={linkStyle}>
-            ƒ+? Back
+             Back
           </Link>
         </div>
         <div style={card}>

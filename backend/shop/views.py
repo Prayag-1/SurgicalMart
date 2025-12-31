@@ -8,6 +8,7 @@ from .utils import generate_invoice_pdf
 
 
 from .models import Category, Product, BulkInquiry, Order, OrderItem
+from .notifications import send_order_placed
 from .serializers import (
     CategorySerializer,
     ProductSerializer,
@@ -173,6 +174,9 @@ class CheckoutView(APIView):
         invoice_rel_path = generate_invoice_pdf(order)
         order.invoice_pdf = invoice_rel_path
         order.save()
+
+        # Notifications (best-effort)
+        send_order_placed(order)
 
         return Response(
             {

@@ -8,6 +8,7 @@ from .models import (
     OrderStatusAuditLog,
     OrderAdminNote,
     Brand,
+    AdminSetting,
 )
 
 
@@ -77,6 +78,29 @@ class BrandWriteSerializer(serializers.ModelSerializer):
         if qs.filter(slug__iexact=value).exists():
             raise serializers.ValidationError("Slug must be unique.")
         return value
+
+
+class AdminSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdminSetting
+        fields = [
+            "id",
+            "site_name",
+            "default_meta_title",
+            "default_meta_description",
+            "default_meta_keywords",
+            "default_og_image",
+            "notify_admin_email",
+            "notify_admin_whatsapp",
+            "notify_customer_email",
+            "notify_customer_whatsapp",
+            "admin_notification_email",
+            "admin_notification_phone",
+            "whatsapp_api_url",
+            "whatsapp_api_token",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "updated_at"]
 
     def validate_logo(self, value):
         if value:
@@ -180,6 +204,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "address",
             "total_amount",
             "status",
+            "payment_method",
+            "payment_status",
             "created_at",
             "updated_at",
             "items",

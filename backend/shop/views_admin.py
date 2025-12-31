@@ -9,7 +9,7 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from .models import Order, Product, OrderAdminNote, Category, Brand
+from .models import Order, Product, OrderAdminNote, Category, Brand, AdminSetting
 from .serializers import (
     AdminOrderSerializer,
     ProductSerializer,
@@ -20,9 +20,10 @@ from .serializers import (
     CategoryWriteSerializer,
     BrandSerializer,
     BrandWriteSerializer,
+    AdminSettingSerializer,
 )
 from .permissions import IsAdminUser
-from .services import change_order_status, ALLOWED_ORDER_TRANSITIONS
+from .services import change_order_status, ALLOWED_ORDER_TRANSITIONS, mark_cod_received
 
 
 # -------------------------------
@@ -58,6 +59,18 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 reason=reason,
                 meta=meta,
             )
+        except Order.DoesNotExist:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AdminOrderSerializer(order, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="payment-received")
+    def payment_received(self, request, pk=None):
+        try:
+            order = mark_cod_received(order_id=pk, actor=request.user)
         except Order.DoesNotExist:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
         except ValidationError as exc:
@@ -268,6 +281,30 @@ class AdminDashboardView(APIView):
                 "recent_products": recent_products,
             }
         )
+
+
+# -------------------------------
+# ADMIN SETTINGS (singleton)
+# -------------------------------
+class AdminSettingView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_object(self):
+        obj, _ = AdminSetting.objects.get_or_create(id=1, defaults={"site_name": "Surgical Mart Nepal"})
+        return obj
+
+    def get(self, request):
+        settings_obj = self.get_object()
+        serializer = AdminSettingSerializer(settings_obj, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request):
+        settings_obj = self.get_object()
+        serializer = AdminSettingSerializer(settings_obj, data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 # -------------------------------

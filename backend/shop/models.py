@@ -53,6 +53,26 @@ class Brand(models.Model):
         return self.name
 
 
+class AdminSetting(models.Model):
+    site_name = models.CharField(max_length=150, default="Surgical Mart")
+    default_meta_title = models.CharField(max_length=255, blank=True)
+    default_meta_description = models.TextField(blank=True)
+    default_meta_keywords = models.CharField(max_length=255, blank=True)
+    default_og_image = models.ImageField(upload_to="settings/", null=True, blank=True)
+    notify_admin_email = models.BooleanField(default=True)
+    notify_admin_whatsapp = models.BooleanField(default=False)
+    notify_customer_email = models.BooleanField(default=True)
+    notify_customer_whatsapp = models.BooleanField(default=False)
+    admin_notification_email = models.EmailField(blank=True)
+    admin_notification_phone = models.CharField(max_length=30, blank=True)
+    whatsapp_api_url = models.URLField(blank=True)
+    whatsapp_api_token = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.site_name
+
+
 class Product(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
@@ -131,6 +151,29 @@ class Order(models.Model):
     stock_adjusted = models.BooleanField(default=False)
     admin_note = models.TextField(blank=True)
 
+    PAYMENT_METHOD_COD = "COD"
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_METHOD_COD, "Cash on Delivery"),
+    ]
+
+    PAYMENT_STATUS_PENDING = "pending"
+    PAYMENT_STATUS_CONFIRMED = "confirmed"
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_PENDING, "Pending"),
+        (PAYMENT_STATUS_CONFIRMED, "Confirmed"),
+    ]
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default=PAYMENT_METHOD_COD,
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=PAYMENT_STATUS_PENDING,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -141,6 +184,7 @@ class Order(models.Model):
         indexes = [
             Index(fields=["status"]),
             Index(fields=["created_at"]),
+            Index(fields=["payment_status"]),
         ]
 
 

@@ -7,6 +7,7 @@ from .views_admin import (
     AdminDashboardView,
     CategoryAdminViewSet,
     BrandAdminViewSet,
+    AdminSettingView,
 )
 
 router = DefaultRouter()
@@ -17,6 +18,7 @@ router.register(r"brands", BrandAdminViewSet, basename="admin-brands")
 
 urlpatterns = [
     path("dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("settings/", AdminSettingView.as_view(), name="admin-settings"),
 ]
 
 urlpatterns += router.urls

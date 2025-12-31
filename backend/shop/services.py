@@ -3,7 +3,8 @@ from typing import Any, Optional
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
-from .models import Order, OrderStatusAuditLog, Product
+from .models import Order, OrderStatusAuditLog, Product, OrderAdminNote
+from .notifications import send_order_shipped, send_cod_confirmed
 
 
 ALLOWED_ORDER_TRANSITIONS = {
@@ -100,5 +101,37 @@ def change_order_status(
             reason=reason or "",
             meta=meta if meta is not None else None,
         )
+
+        if to_status == Order.STATUS_SHIPPED:
+            send_order_shipped(order)
+
+        return order
+
+
+def mark_cod_received(order_id: int, actor=None) -> Order:
+    actor_user = actor if actor and getattr(actor, "is_authenticated", False) else None
+
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(pk=order_id)
+
+        if order.payment_method != Order.PAYMENT_METHOD_COD:
+            raise ValidationError({"detail": "Only COD payments can be marked as received."})
+
+        if order.payment_status == Order.PAYMENT_STATUS_CONFIRMED:
+            return order
+
+        order.payment_status = Order.PAYMENT_STATUS_CONFIRMED
+        order.save(update_fields=["payment_status", "updated_at"])
+
+        # Record as admin note to surface in timeline
+        OrderAdminNote.objects.create(
+            order=order,
+            author=actor_user,
+            author_email_snapshot=getattr(actor_user, "email", "") if actor_user else "",
+            note="COD payment received",
+            is_pinned=False,
+        )
+
+        send_cod_confirmed(order)
 
         return order
