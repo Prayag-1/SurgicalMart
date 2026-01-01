@@ -60,3 +60,13 @@ export const updateOrderStatus = async (orderId, status) => {
 
   return handleResponse(response)
 }
+
+export const addShipment = async (orderId, payload) => {
+  const response = await fetch(`${BASE_URL}/api/admin/orders/${orderId}/shipment/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  })
+
+  return handleResponse(response)
+}

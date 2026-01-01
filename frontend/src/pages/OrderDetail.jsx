@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { fetchOrderDetail, updateOrderStatus } from '../services/orders'
+import { fetchOrderDetail, updateOrderStatus, addShipment } from '../services/orders'
 
 const statusOptions = [
   'PENDING',
@@ -21,6 +21,11 @@ function OrderDetail() {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState('')
+  const [shipmentSaving, setShipmentSaving] = useState(false)
+  const [shipmentMessage, setShipmentMessage] = useState('')
+  const [shipmentError, setShipmentError] = useState('')
+  const [courierName, setCourierName] = useState('')
+  const [trackingNumber, setTrackingNumber] = useState('')
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -30,6 +35,8 @@ function OrderDetail() {
         const data = await fetchOrderDetail(id)
         setOrder(data)
         setStatus(data.status)
+        setCourierName(data.courier_name || '')
+        setTrackingNumber(data.tracking_number || '')
       } catch (err) {
         setError(err.message || 'Unable to load order')
         if (err.message?.toLowerCase().includes('unauthorized')) {
@@ -60,6 +67,30 @@ function OrderDetail() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleShipmentSubmit = async () => {
+    if (shipmentSaving) return
+    setShipmentSaving(true)
+    setShipmentMessage('')
+    setShipmentError('')
+    try {
+      const updated = await addShipment(id, {
+        courier_name: courierName,
+        tracking_number: trackingNumber,
+      })
+      setOrder(updated)
+      setCourierName(updated.courier_name || '')
+      setTrackingNumber(updated.tracking_number || '')
+      setShipmentMessage('Shipment added')
+    } catch (err) {
+      setShipmentError(err.message || 'Unable to add shipment')
+      if (err.message?.toLowerCase().includes('unauthorized')) {
+        navigate('/login', { replace: true })
+      }
+    } finally {
+      setShipmentSaving(false)
     }
   }
 
@@ -150,6 +181,39 @@ function OrderDetail() {
       </div>
 
       <div style={{ marginTop: 16, fontWeight: 600 }}>Total: ${order.total_amount}</div>
+
+      <div style={{ marginTop: 24, display: 'grid', gap: 16, gridTemplateColumns: '2fr 1fr' }}>
+        <div style={card}>
+          <h4>Shipment</h4>
+          <p>Courier: {order.courier_name || '—'}</p>
+          <p>Tracking: {order.tracking_number || '—'}</p>
+          <p>Shipped at: {order.shipped_at ? new Date(order.shipped_at).toLocaleString() : '—'}</p>
+          {shipmentMessage ? <p style={{ color: 'green' }}>{shipmentMessage}</p> : null}
+          {shipmentError ? <p style={{ color: 'red' }}>{shipmentError}</p> : null}
+        </div>
+
+        {order.payment_status === 'confirmed' && !order.courier_name ? (
+          <div style={card}>
+            <h4>Add Shipment</h4>
+            <label style={label}>
+              <span>Courier Name</span>
+              <input value={courierName} onChange={(e) => setCourierName(e.target.value)} style={input} />
+            </label>
+            <label style={label}>
+              <span>Tracking Number</span>
+              <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} style={input} />
+            </label>
+            <button
+              type="button"
+              onClick={handleShipmentSubmit}
+              disabled={shipmentSaving}
+              style={{ ...button, marginTop: 12 }}
+            >
+              {shipmentSaving ? 'Saving...' : 'Add Shipment'}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

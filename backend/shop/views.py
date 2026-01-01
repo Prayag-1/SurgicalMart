@@ -1,10 +1,8 @@
 from django.shortcuts import get_object_or_404
-from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .utils import generate_invoice_pdf
 
 
 from .models import Category, Product, BulkInquiry, Order, OrderItem
@@ -169,11 +167,6 @@ class CheckoutView(APIView):
 
         # Clear cart
         cart.clear()
-
-        # Generate invoice PDF and attach
-        invoice_rel_path = generate_invoice_pdf(order)
-        order.invoice_pdf = invoice_rel_path
-        order.save()
 
         # Notifications (best-effort)
         send_order_placed(order)

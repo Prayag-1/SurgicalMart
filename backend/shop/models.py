@@ -173,6 +173,9 @@ class Order(models.Model):
         choices=PAYMENT_STATUS_CHOICES,
         default=PAYMENT_STATUS_PENDING,
     )
+    courier_name = models.CharField(max_length=100, blank=True)
+    tracking_number = models.CharField(max_length=100, blank=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -185,7 +188,26 @@ class Order(models.Model):
             Index(fields=["status"]),
             Index(fields=["created_at"]),
             Index(fields=["payment_status"]),
+            Index(fields=["courier_name"]),
+            Index(fields=["tracking_number"]),
+            Index(fields=["shipped_at"]),
         ]
+
+class Invoice(models.Model):
+    order = models.OneToOneField(Order, related_name="invoice", on_delete=models.CASCADE)
+    number = models.PositiveIntegerField(unique=True)
+    pdf = models.FileField(upload_to="invoices/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["number"]),
+            Index(fields=["order"]),
+        ]
+
+    def __str__(self):
+        return f"Invoice #{self.number}"
 
 
 class OrderStatusLog(models.Model):

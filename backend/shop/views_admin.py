@@ -21,9 +21,16 @@ from .serializers import (
     BrandSerializer,
     BrandWriteSerializer,
     AdminSettingSerializer,
+    ShipmentSerializer,
 )
 from .permissions import IsAdminUser
-from .services import change_order_status, ALLOWED_ORDER_TRANSITIONS, mark_cod_received
+from .services import (
+    change_order_status,
+    ALLOWED_ORDER_TRANSITIONS,
+    mark_cod_received,
+    generate_invoice,
+    add_shipment_details,
+)
 
 
 # -------------------------------
@@ -78,6 +85,21 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
         serializer = AdminOrderSerializer(order, context={"request": request})
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="shipment")
+    def shipment(self, request, pk=None):
+        serializer = ShipmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        courier_name = serializer.validated_data["courier_name"]
+        tracking_number = serializer.validated_data["tracking_number"]
+
+        try:
+            order = self.get_object()
+            order = add_shipment_details(order, courier_name, tracking_number, request.user)
+        except ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(AdminOrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["get", "post"], url_path="notes")
     def notes(self, request, pk=None):
@@ -174,6 +196,36 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         events = events[:limit]
 
         return Response(events)
+
+    @action(detail=True, methods=["post", "get"], url_path="invoice")
+    def invoice(self, request, pk=None):
+        order = self.get_object()
+
+        if request.method.lower() == "post":
+            try:
+                invoice = generate_invoice(order, request.user)
+            except ValidationError as exc:
+                return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            invoice = getattr(order, "invoice", None)
+            if not invoice:
+                try:
+                    invoice = generate_invoice(order, request.user)
+                except ValidationError as exc:
+                    return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        data = {
+            "number": invoice.number,
+            "created_at": invoice.created_at,
+            "pdf_url": request.build_absolute_uri(invoice.pdf.url) if invoice.pdf else None,
+        }
+
+        if request.query_params.get("download") == "1" and invoice.pdf:
+            from django.http import FileResponse
+
+            return FileResponse(invoice.pdf.open("rb"), as_attachment=True, filename=invoice.pdf.name.split("/")[-1])
+
+        return Response(data)
 
     @action(detail=True, methods=["get"], url_path="allowed-statuses")
     def allowed_statuses(self, request, pk=None):

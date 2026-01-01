@@ -80,6 +80,9 @@ function AdminDashboard() {
           <Link to="/admin/brands" style={buttonLinkSecondary}>
             Brands
           </Link>
+          <Link to="/admin/settings" style={buttonLinkSecondary}>
+            Settings
+          </Link>
         </div>
       </div>
 

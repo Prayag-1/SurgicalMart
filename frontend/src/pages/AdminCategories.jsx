@@ -50,6 +50,12 @@ function AdminCategories() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [form, setForm] = useState(initialForm)
+  const slugify = (val) =>
+    (val || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
 
   const load = async () => {
     setLoading(true)
@@ -134,6 +140,16 @@ function AdminCategories() {
     }
   }
 
+  const handleNameChange = (value) => {
+    setForm((f) => {
+      const next = { ...f, name: value }
+      if (!f.slug || f.slug === slugify(f.name || '')) {
+        next.slug = slugify(value)
+      }
+      return next
+    })
+  }
+
   const findNode = (nodes, id) => {
     for (const node of nodes) {
       if (node.id === id) return node
@@ -193,8 +209,24 @@ function AdminCategories() {
         <h3 style={{ marginTop: 0 }}>{form.id ? 'Edit category' : 'Add category'}</h3>
         {error ? <p style={{ color: 'red' }}>{error}</p> : null}
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 10 }}>
-          {renderField('Name', 'name', form, setForm, fieldErrors)}
-          {renderField('Slug', 'slug', form, setForm, fieldErrors)}
+          <label style={label}>
+            <span>Name</span>
+            <input
+              value={form.name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              style={input}
+            />
+            {fieldErrors.name ? <FieldError msg={fieldErrors.name} /> : null}
+          </label>
+          <label style={label}>
+            <span>Slug</span>
+            <input
+              value={form.slug}
+              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+              style={input}
+            />
+            {fieldErrors.slug ? <FieldError msg={fieldErrors.slug} /> : null}
+          </label>
           <label style={label}>
             <span>Parent</span>
             <select

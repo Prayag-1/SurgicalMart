@@ -2,9 +2,11 @@ from typing import Any, Optional
 
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
+from django.utils import timezone
 
-from .models import Order, OrderStatusAuditLog, Product, OrderAdminNote
-from .notifications import send_order_shipped, send_cod_confirmed
+from .models import Order, OrderStatusAuditLog, Product, OrderAdminNote, Invoice
+from .notifications import send_order_shipped, send_cod_confirmed, send_invoice_email
+from .utils import generate_invoice_pdf
 
 
 ALLOWED_ORDER_TRANSITIONS = {
@@ -134,4 +136,89 @@ def mark_cod_received(order_id: int, actor=None) -> Order:
 
         send_cod_confirmed(order)
 
+        generate_invoice(order, actor_user)
+
         return order
+
+
+def _next_invoice_number():
+    last = Invoice.objects.select_for_update().order_by("-number").first()
+    return (last.number + 1) if last else 1
+
+
+def generate_invoice(order: Order, actor=None) -> Invoice:
+    if getattr(order, "invoice", None):
+        return order.invoice
+
+    if order.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+        raise ValidationError({"detail": "Invoice can only be generated after payment confirmation."})
+
+    with transaction.atomic():
+        if getattr(order, "invoice", None):
+            return order.invoice
+
+        number = _next_invoice_number()
+        pdf_rel_path = generate_invoice_pdf(order, invoice_number=number)
+
+        invoice = Invoice.objects.create(
+            order=order,
+            number=number,
+            pdf=pdf_rel_path,
+        )
+
+        order.invoice_pdf = pdf_rel_path
+        order.save(update_fields=["invoice_pdf", "updated_at"])
+
+        OrderAdminNote.objects.create(
+            order=order,
+            author=actor if actor and getattr(actor, "is_authenticated", False) else None,
+            author_email_snapshot=getattr(actor, "email", "") if actor and getattr(actor, "is_authenticated", False) else "",
+            note=f"Invoice #{number} generated",
+            is_pinned=False,
+        )
+
+        send_invoice_email(order)
+
+        return invoice
+
+
+def add_shipment_details(order: Order, courier_name: str, tracking_number: str, actor=None) -> Order:
+    if order.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+        raise ValidationError({"detail": "Shipment can only be added after payment confirmation."})
+
+    if order.status in {Order.STATUS_CANCELLED, Order.STATUS_DELIVERED}:
+        raise ValidationError({"detail": "Shipment cannot be added for delivered or cancelled orders."})
+
+    with transaction.atomic():
+        order_locked = Order.objects.select_for_update().get(pk=order.pk)
+
+        # Refresh to ensure latest state
+        if order_locked.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+            raise ValidationError({"detail": "Shipment can only be added after payment confirmation."})
+        if order_locked.status in {Order.STATUS_CANCELLED, Order.STATUS_DELIVERED}:
+            raise ValidationError({"detail": "Shipment cannot be added for delivered or cancelled orders."})
+
+        same_details = (
+            order_locked.courier_name == courier_name
+            and order_locked.tracking_number == tracking_number
+        )
+        if same_details and order_locked.shipped_at:
+            return order_locked
+
+        order_locked.courier_name = courier_name
+        order_locked.tracking_number = tracking_number
+        if not order_locked.shipped_at:
+            order_locked.shipped_at = timezone.now()
+        order_locked.save(update_fields=["courier_name", "tracking_number", "shipped_at", "updated_at"])
+
+        OrderAdminNote.objects.create(
+            order=order_locked,
+            author=actor if actor and getattr(actor, "is_authenticated", False) else None,
+            author_email_snapshot=getattr(actor, "email", "") if actor and getattr(actor, "is_authenticated", False) else "",
+            note=f"Order shipped via {courier_name}, tracking #{tracking_number}",
+            is_pinned=False,
+        )
+
+        send_order_shipped(order_locked)
+
+        return order_locked

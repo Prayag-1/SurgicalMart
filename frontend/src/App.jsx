@@ -6,6 +6,7 @@ import AdminProductsList from './pages/AdminProductsList'
 import AdminProductEdit from './pages/AdminProductEdit'
 import AdminCategories from './pages/AdminCategories'
 import AdminBrands from './pages/AdminBrands'
+import AdminSettings from './pages/AdminSettings'
 import OrdersList from './pages/OrdersList'
 import OrderDetail from './pages/OrderDetail'
 import { isAuthenticated } from './utils/tokenStorage'
@@ -125,6 +126,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminBrands />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute>
+              <AdminSettings />
             </ProtectedRoute>
           }
         />

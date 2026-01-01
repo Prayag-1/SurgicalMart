@@ -91,3 +91,23 @@ def send_order_shipped(order: Order):
         )
     if admin_settings.notify_customer_whatsapp and order.phone:
         _send_whatsapp(f"Order #{order.id} shipped", order.phone, admin_settings)
+
+
+def send_invoice_email(order: Order):
+    admin_settings = _get_settings()
+    if not getattr(order, "invoice", None):
+        return
+
+    if admin_settings.notify_customer_email and order.email:
+        _send_email(
+            subject=f"Invoice #{order.invoice.number} for order #{order.id}",
+            body="Your invoice is ready.",
+            recipients=[order.email],
+        )
+
+    if admin_settings.notify_admin_email and admin_settings.admin_notification_email:
+        _send_email(
+            subject=f"Invoice generated for order #{order.id}",
+            body=f"Invoice #{order.invoice.number} has been generated.",
+            recipients=[admin_settings.admin_notification_email],
+        )

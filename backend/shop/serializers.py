@@ -193,6 +193,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     invoice_pdf = serializers.SerializerMethodField()
+    invoice = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -206,10 +207,14 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "payment_method",
             "payment_status",
+            "courier_name",
+            "tracking_number",
+            "shipped_at",
             "created_at",
             "updated_at",
             "items",
             "invoice_pdf",
+            "invoice",
         ]
 
     def get_invoice_pdf(self, obj):
@@ -223,6 +228,20 @@ class OrderSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url)
 
         return url
+
+    def get_invoice(self, obj):
+        inv = getattr(obj, "invoice", None)
+        if not inv:
+            return None
+        request = self.context.get("request")
+        url = inv.pdf.url if inv.pdf else None
+        if url and request:
+            url = request.build_absolute_uri(url)
+        return {
+            "number": inv.number,
+            "pdf_url": url,
+            "created_at": inv.created_at,
+        }
 
 
 # --------------------------
@@ -330,3 +349,8 @@ class OrderAdminNoteSerializer(serializers.ModelSerializer):
         validated_data.pop("author", None)
         validated_data.pop("author_email_snapshot", None)
         return super().update(instance, validated_data)
+
+
+class ShipmentSerializer(serializers.Serializer):
+    courier_name = serializers.CharField(max_length=100)
+    tracking_number = serializers.CharField(max_length=100)

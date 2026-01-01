@@ -103,6 +103,24 @@ function AdminBrands() {
     }
   }
 
+  const handleNameChange = (value) => {
+    setForm((f) => {
+      const next = { ...f, name: value }
+      // Auto-fill slug only if user hasn't typed a custom slug (empty or matches previous auto)
+      if (!f.slug || f.slug === slugify(f.name || '')) {
+        next.slug = slugify(value)
+      }
+      return next
+    })
+  }
+
+  const slugify = (val) =>
+    (val || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
   if (loading) return <div style={{ padding: 24 }}>Loading brands...</div>
 
   return (
@@ -155,8 +173,24 @@ function AdminBrands() {
       <div style={card}>
         <h3 style={{ marginTop: 0 }}>{form.id ? 'Edit brand' : 'Add brand'}</h3>
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 10 }}>
-          {renderField('Name', 'name', form, setForm, fieldErrors)}
-          {renderField('Slug', 'slug', form, setForm, fieldErrors)}
+          <label style={label}>
+            <span>Name</span>
+            <input
+              value={form.name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              style={input}
+            />
+            {fieldErrors.name ? <FieldError msg={fieldErrors.name} /> : null}
+          </label>
+          <label style={label}>
+            <span>Slug</span>
+            <input
+              value={form.slug}
+              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+              style={input}
+            />
+            {fieldErrors.slug ? <FieldError msg={fieldErrors.slug} /> : null}
+          </label>
           {renderField('Description', 'description', form, setForm, fieldErrors, true)}
           {renderField('SEO Title', 'seo_title', form, setForm, fieldErrors)}
           {renderField('SEO Description', 'seo_description', form, setForm, fieldErrors, true)}

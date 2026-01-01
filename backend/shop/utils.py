@@ -4,7 +4,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 
-def generate_invoice_pdf(order):
+def generate_invoice_pdf(order, invoice_number=None):
     """
     Generate a simple minimal invoice PDF for the given order.
     Returns relative path: invoices/filename.pdf
@@ -12,7 +12,8 @@ def generate_invoice_pdf(order):
     invoices_dir = settings.MEDIA_ROOT / "invoices"
     invoices_dir.mkdir(parents=True, exist_ok=True)
 
-    file_name = f"invoice_order_{order.id}.pdf"
+    file_id = invoice_number if invoice_number is not None else order.id
+    file_name = f"invoice_{file_id}.pdf"
     file_path = invoices_dir / file_name
 
     c = canvas.Canvas(str(file_path), pagesize=A4)
