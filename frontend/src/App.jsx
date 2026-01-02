@@ -36,15 +36,31 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated())
+  const [authChecking, setAuthChecking] = useState(false)
 
   useEffect(() => {
     const syncAuth = () => setAuthenticated(isAuthenticated())
     window.addEventListener('storage', syncAuth)
-    return () => window.removeEventListener('storage', syncAuth)
+    window.addEventListener('token-change', syncAuth)
+    const clearBanners = () => {
+      setAuthChecking(true)
+      syncAuth()
+      setAuthChecking(false)
+    }
+    window.addEventListener('auth-cleared', clearBanners)
+    return () => {
+      window.removeEventListener('storage', syncAuth)
+      window.removeEventListener('token-change', syncAuth)
+      window.removeEventListener('auth-cleared', clearBanners)
+    }
   }, [])
 
   const handleAuthSuccess = () => {
     setAuthenticated(true)
+  }
+
+  if (authChecking) {
+    return <div style={{ padding: 24 }}>Checking session...</div>
   }
 
   return (

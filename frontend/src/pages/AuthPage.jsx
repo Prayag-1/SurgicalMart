@@ -43,6 +43,16 @@ function AuthPage({ onAuthSuccess }) {
     }
   }
 
+  // Clear banners on auth-cleared events (e.g., forced logout)
+  useEffect(() => {
+    const reset = () => {
+      setError('')
+      setMessage('')
+    }
+    window.addEventListener('auth-cleared', reset)
+    return () => window.removeEventListener('auth-cleared', reset)
+  }, [])
+
   return (
     <div className="page">
       <div className="auth-shell">
