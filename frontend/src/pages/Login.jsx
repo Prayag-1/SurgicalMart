@@ -32,7 +32,7 @@ function Login() {
     try {
       const tokens = await login(email, password)
       setTokens(tokens)
-      window.location.assign('/admin/dashboard')
+      window.location.assign('/admin')
     } catch (err) {
       setError(err.message || 'Invalid credentials')
     } finally {

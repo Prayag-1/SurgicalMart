@@ -2,10 +2,24 @@ import { clearTokens, getAccessToken } from '../utils/tokenStorage'
 
 const BASE_URL = 'http://127.0.0.1:8000'
 
-const authHeaders = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${getAccessToken()}`,
-})
+const getTokenOrThrow = () => {
+  const token = getAccessToken()
+  if (!token) {
+    clearTokens()
+    throw new Error('Unauthorized. Please log in again.')
+  }
+  return token
+}
+
+const authHeaders = (useJson = true) => {
+  const headers = {
+    Authorization: `Bearer ${getTokenOrThrow()}`,
+  }
+  if (useJson) {
+    headers['Content-Type'] = 'application/json'
+  }
+  return headers
+}
 
 const handleResponse = async (response) => {
   const payload = await response.json().catch(() => ({}))
@@ -25,8 +39,18 @@ const handleResponse = async (response) => {
   return payload
 }
 
-export const fetchProducts = async () => {
-  const response = await fetch(`${BASE_URL}/api/admin/products/`, {
+const toQueryString = (params = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    search.append(key, value)
+  })
+  const qs = search.toString()
+  return qs ? `?${qs}` : ''
+}
+
+export const fetchProducts = async (params = {}) => {
+  const response = await fetch(`${BASE_URL}/api/admin/products/${toQueryString(params)}`, {
     method: 'GET',
     headers: authHeaders(),
   })
@@ -43,11 +67,23 @@ export const fetchProduct = async (id) => {
   return handleResponse(response)
 }
 
+export const createProduct = async (payload) => {
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData
+  const response = await fetch(`${BASE_URL}/api/admin/products/`, {
+    method: 'POST',
+    headers: authHeaders(!isForm),
+    body: isForm ? payload : JSON.stringify(payload),
+  })
+
+  return handleResponse(response)
+}
+
 export const updateProduct = async (id, payload) => {
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData
   const response = await fetch(`${BASE_URL}/api/admin/products/${id}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+    headers: authHeaders(!isForm),
+    body: isForm ? payload : JSON.stringify(payload),
   })
 
   return handleResponse(response)

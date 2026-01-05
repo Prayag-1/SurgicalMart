@@ -2,8 +2,17 @@ import { clearTokens, getAccessToken } from '../utils/tokenStorage'
 
 const BASE_URL = 'http://127.0.0.1:8000'
 
+const getTokenOrThrow = () => {
+  const token = getAccessToken()
+  if (!token) {
+    clearTokens()
+    throw new Error('Unauthorized. Please log in again.')
+  }
+  return token
+}
+
 const authHeaders = () => ({
-  Authorization: `Bearer ${getAccessToken()}`,
+  Authorization: `Bearer ${getTokenOrThrow()}`,
 })
 
 const handleResponse = async (response) => {
@@ -24,6 +33,16 @@ const handleResponse = async (response) => {
   return payload
 }
 
+const toQueryString = (params = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    search.append(key, value)
+  })
+  const qs = search.toString()
+  return qs ? `?${qs}` : ''
+}
+
 export const fetchCategoryTree = async () => {
   const res = await fetch(`${BASE_URL}/api/admin/categories/tree/`, {
     method: 'GET',
@@ -32,9 +51,8 @@ export const fetchCategoryTree = async () => {
   return handleResponse(res)
 }
 
-export const fetchCategories = async (parentId = null) => {
-  const query = parentId === null ? '' : `?parent=${parentId}`
-  const res = await fetch(`${BASE_URL}/api/admin/categories/${query}`, {
+export const fetchCategories = async (params = {}) => {
+  const res = await fetch(`${BASE_URL}/api/admin/categories/${toQueryString(params)}`, {
     method: 'GET',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
   })

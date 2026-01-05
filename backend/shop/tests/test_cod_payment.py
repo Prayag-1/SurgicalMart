@@ -67,6 +67,7 @@ class CODPaymentTests(APITestCase):
         send_cod_confirmed(self.order)
         send_order_shipped(self.order)
 
+
     def test_invoice_generation_endpoint(self):
         self.client.force_authenticate(user=self.staff)
         # Mark payment confirmed
@@ -79,3 +80,4 @@ class CODPaymentTests(APITestCase):
         data = res.json()
         self.assertIn("number", data)
         self.assertTrue(Invoice.objects.filter(order=self.order).exists())
+        

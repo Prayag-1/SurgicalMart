@@ -17,6 +17,7 @@ from .models import (
 # --------------------------
 class CategorySerializer(serializers.ModelSerializer):
     parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    product_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Category
@@ -32,6 +33,8 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "parent",
+            "is_active",
+            "featured",
             "seo_title",
             "seo_description",
             "seo_keywords",
@@ -66,6 +69,8 @@ class BrandWriteSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "logo",
+            "is_active",
+            "featured",
             "seo_title",
             "seo_description",
             "seo_keywords",

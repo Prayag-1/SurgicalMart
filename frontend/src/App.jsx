@@ -5,28 +5,21 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminProductsList from './pages/AdminProductsList'
 import AdminProductEdit from './pages/AdminProductEdit'
 import AdminCategories from './pages/AdminCategories'
+import AdminCategoryEdit from './pages/AdminCategoryEdit'
 import AdminBrands from './pages/AdminBrands'
+import AdminBrandEdit from './pages/AdminBrandEdit'
 import AdminSettings from './pages/AdminSettings'
 import OrdersList from './pages/OrdersList'
 import OrderDetail from './pages/OrderDetail'
+import ProductList from './pages/ProductList'
+import ProductDetailPage from './pages/ProductDetail'
+import CartPage from './pages/CartPage'
+import CheckoutPage from './pages/CheckoutPage'
+import OrderConfirmation from './pages/OrderConfirmation'
+import HomePage from './pages/HomePage'
+import AdminLayout from './components/admin/AdminLayout'
 import { isAuthenticated } from './utils/tokenStorage'
 
-// -------------------------------
-// Simple public pages (no auth required)
-// -------------------------------
-const HomePage = () => <div style={{ padding: 24 }}>Public store home (no login required)</div>
-const ProductsPage = () => <div style={{ padding: 24 }}>Product listing (public)</div>
-const ProductDetailPage = () => <div style={{ padding: 24 }}>Product detail (public)</div>
-const CartPage = () => <div style={{ padding: 24 }}>Cart (public)</div>
-const CheckoutPage = () => (
-  <div style={{ padding: 24 }}>
-    Checkout (public) — customers provide full name, email, phone, and address; they are not users.
-  </div>
-)
-
-// -------------------------------
-// ProtectedRoute helper for admin-only routes
-// -------------------------------
 const ProtectedRoute = ({ children }) => {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />
@@ -68,10 +61,11 @@ function App() {
       <Routes>
         {/* Public store routes */}
         <Route path="/" element={<HomePage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/product/:slug" element={<ProductDetailPage />} />
+        <Route path="/products" element={<ProductList />} />
+        <Route path="/products/:slug" element={<ProductDetailPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
 
         {/* Legacy admin login path redirect */}
         <Route path="/admin/login" element={<Navigate to="/login" replace />} />
@@ -81,7 +75,7 @@ function App() {
           path="/login"
           element={
             authenticated ? (
-              <Navigate to="/admin/dashboard" replace />
+              <Navigate to="/admin" replace />
             ) : (
               <AuthPage onAuthSuccess={handleAuthSuccess} />
             )
@@ -90,69 +84,28 @@ function App() {
 
         {/* Admin protected routes */}
         <Route
-          path="/admin/dashboard"
+          path="/admin/*"
           element={
             <ProtectedRoute>
-              <AdminDashboard />
+              <AdminLayout />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/admin/orders"
-          element={
-            <ProtectedRoute>
-              <OrdersList />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/orders/:id"
-          element={
-            <ProtectedRoute>
-              <OrderDetail />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/products"
-          element={
-            <ProtectedRoute>
-              <AdminProductsList />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/products/:id"
-          element={
-            <ProtectedRoute>
-              <AdminProductEdit />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/categories"
-          element={
-            <ProtectedRoute>
-              <AdminCategories />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/brands"
-          element={
-            <ProtectedRoute>
-              <AdminBrands />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/settings"
-          element={
-            <ProtectedRoute>
-              <AdminSettings />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<Navigate to="/admin" replace />} />
+          <Route path="orders" element={<OrdersList />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="products" element={<AdminProductsList />} />
+          <Route path="products/new" element={<AdminProductEdit />} />
+          <Route path="products/:id" element={<AdminProductEdit />} />
+          <Route path="categories" element={<AdminCategories />} />
+          <Route path="categories/new" element={<AdminCategoryEdit />} />
+          <Route path="categories/:id" element={<AdminCategoryEdit />} />
+          <Route path="brands" element={<AdminBrands />} />
+          <Route path="brands/new" element={<AdminBrandEdit />} />
+          <Route path="brands/:id" element={<AdminBrandEdit />} />
+          <Route path="settings" element={<AdminSettings />} />
+        </Route>
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

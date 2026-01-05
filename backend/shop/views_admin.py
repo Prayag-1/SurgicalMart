@@ -5,7 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import ValidationError
-from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count, Sum, F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -247,8 +248,10 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     ordering_fields = ["stock", "price", "created_at"]
+    search_fields = ["name", "description", "sku"]
+    filterset_fields = ["is_active", "category", "brand"]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
@@ -295,42 +298,76 @@ class AdminDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        today = timezone.now().date()
+        today = timezone.localdate()
+        start_month = today.replace(day=1)
 
         total_orders = Order.objects.count()
         orders_today = Order.objects.filter(created_at__date=today).count()
 
-        status_counts = (
-            Order.objects.values("status")
-            .annotate(count=Count("id"))
-            .order_by()
-        )
-        orders_by_status = {row["status"]: row["count"] for row in status_counts}
+        pending_orders = Order.objects.filter(status=Order.STATUS_PENDING).count()
+        confirmed_orders = Order.objects.filter(status=Order.STATUS_CONFIRMED).count()
+        shipped_orders = Order.objects.filter(status=Order.STATUS_SHIPPED).count()
+        delivered_orders = Order.objects.filter(status=Order.STATUS_DELIVERED).count()
+        cancelled_orders = Order.objects.filter(status=Order.STATUS_CANCELLED).count()
 
+        total_products = Product.objects.count()
+
+        low_stock_threshold = 5
+        low_stock_qs = Product.objects.filter(stock__lte=low_stock_threshold, is_active=True)
+        low_stock_products_count = low_stock_qs.count()
         low_stock_products = list(
-            Product.objects.filter(stock__lte=5)
-            .order_by("stock", "name")
-            .values("id", "name", "stock", "is_active")[:10]
+            low_stock_qs.select_related("category", "brand")
+            .order_by("stock", "name")[:5]
+            .values(
+                "id",
+                "name",
+                "sku",
+                "stock",
+                "price",
+                category_name=F("category__name"),
+                brand_name=F("brand__name"),
+            )
         )
 
         recent_orders = list(
             Order.objects.order_by("-created_at")
-            .values("id", "full_name", "total_amount", "status", "created_at")[:10]
+            .values(
+                "id",
+                "full_name",
+                "phone",
+                "total_amount",
+                "status",
+                "created_at",
+            )[:5]
         )
 
-        recent_products = list(
-            Product.objects.order_by("-created_at")
-            .values("id", "name", "stock", "is_active", "created_at")[:10]
+        revenue_qs = Order.objects.filter(
+            payment_status=Order.PAYMENT_STATUS_CONFIRMED,
+            created_at__date__gte=start_month,
         )
+        revenue_this_month = revenue_qs.aggregate(total=Sum("total_amount"))["total"] or 0
+
+        cod_pending_count = Order.objects.filter(
+            payment_method=Order.PAYMENT_METHOD_COD,
+            payment_status=Order.PAYMENT_STATUS_PENDING,
+        ).count()
 
         return Response(
             {
                 "total_orders": total_orders,
                 "orders_today": orders_today,
-                "orders_by_status": orders_by_status,
-                "low_stock_products": low_stock_products,
+                "pending_orders": pending_orders,
+                "confirmed_orders": confirmed_orders,
+                "shipped_orders": shipped_orders,
+                "delivered_orders": delivered_orders,
+                "cancelled_orders": cancelled_orders,
+                "total_products": total_products,
+                "low_stock_products_count": low_stock_products_count,
                 "recent_orders": recent_orders,
-                "recent_products": recent_products,
+                "low_stock_products": low_stock_products,
+                "revenue_this_month": revenue_this_month,
+                "revenue_is_estimated": False,
+                "cod_pending_count": cod_pending_count,
             }
         )
 
@@ -366,6 +403,10 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().select_related("parent").order_by("name")
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["is_active", "parent", "featured"]
+    search_fields = ["name", "slug", "description"]
+    ordering_fields = ["name", "created_at"]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
@@ -385,7 +426,9 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="tree")
     def tree(self, request):
         categories = list(
-            Category.objects.select_related("parent").order_by("name")
+            Category.objects.select_related("parent")
+            .annotate(product_count=Count("products"))
+            .order_by("name")
         )
         by_parent = {}
         for cat in categories:
@@ -399,9 +442,12 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
                         "id": cat.id,
                         "name": cat.name,
                         "slug": cat.slug,
+                        "is_active": cat.is_active,
+                        "featured": cat.featured,
                         "seo_title": cat.seo_title,
                         "seo_description": cat.seo_description,
                         "seo_keywords": cat.seo_keywords,
+                        "product_count": cat.product_count,
                         "children": build_nodes(cat.id),
                     }
                 )
@@ -417,6 +463,10 @@ class BrandAdminViewSet(viewsets.ModelViewSet):
     queryset = Brand.objects.all().order_by("name")
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["is_active", "featured"]
+    search_fields = ["name", "slug", "description", "seo_keywords"]
+    ordering_fields = ["name", "created_at"]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:

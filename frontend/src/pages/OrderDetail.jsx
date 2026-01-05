@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchOrderDetail, updateOrderStatus, addShipment } from '../services/orders'
 
-const statusOptions = [
-  'PENDING',
-  'CONFIRMED',
-  'PACKED',
-  'SHIPPED',
-  'DELIVERED',
-  'CANCELLED',
-]
+const statusOptions = ['PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
 
 function OrderDetail() {
   const { id } = useParams()
@@ -117,7 +110,7 @@ function OrderDetail() {
   return (
     <div style={{ padding: 24 }}>
       <button type="button" onClick={() => navigate(-1)} style={{ marginBottom: 12 }}>
-        ← Back
+        {'<'} Back
       </button>
 
       <h2>Order #{order.id}</h2>
@@ -141,12 +134,7 @@ function OrderDetail() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={handleUpdateStatus}
-            disabled={saving}
-            style={{ marginTop: 12 }}
-          >
+          <button type="button" onClick={handleUpdateStatus} disabled={saving} style={{ marginTop: 12 }}>
             {saving ? 'Updating...' : 'Update status'}
           </button>
           {message ? <p style={{ color: 'green' }}>{message}</p> : null}
@@ -185,9 +173,9 @@ function OrderDetail() {
       <div style={{ marginTop: 24, display: 'grid', gap: 16, gridTemplateColumns: '2fr 1fr' }}>
         <div style={card}>
           <h4>Shipment</h4>
-          <p>Courier: {order.courier_name || '—'}</p>
-          <p>Tracking: {order.tracking_number || '—'}</p>
-          <p>Shipped at: {order.shipped_at ? new Date(order.shipped_at).toLocaleString() : '—'}</p>
+          <p>Courier: {order.courier_name || 'N/A'}</p>
+          <p>Tracking: {order.tracking_number || 'N/A'}</p>
+          <p>Shipped at: {order.shipped_at ? new Date(order.shipped_at).toLocaleString() : 'N/A'}</p>
           {shipmentMessage ? <p style={{ color: 'green' }}>{shipmentMessage}</p> : null}
           {shipmentError ? <p style={{ color: 'red' }}>{shipmentError}</p> : null}
         </div>
@@ -203,12 +191,7 @@ function OrderDetail() {
               <span>Tracking Number</span>
               <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} style={input} />
             </label>
-            <button
-              type="button"
-              onClick={handleShipmentSubmit}
-              disabled={shipmentSaving}
-              style={{ ...button, marginTop: 12 }}
-            >
+            <button type="button" onClick={handleShipmentSubmit} disabled={shipmentSaving} style={{ ...button, marginTop: 12 }}>
               {shipmentSaving ? 'Saving...' : 'Add Shipment'}
             </button>
           </div>
@@ -236,6 +219,31 @@ const th = {
 const td = {
   padding: '12px 8px',
   fontSize: 14,
+}
+
+const label = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontWeight: 600,
+  color: '#222',
+}
+
+const input = {
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid #d1d5db',
+  fontSize: 14,
+}
+
+const button = {
+  padding: '10px 14px',
+  borderRadius: 8,
+  border: '1px solid #111827',
+  background: '#111827',
+  color: '#fff',
+  cursor: 'pointer',
+  fontWeight: 700,
 }
 
 export default OrderDetail

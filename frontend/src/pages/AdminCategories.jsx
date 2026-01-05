@@ -1,68 +1,102 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import {
-  fetchCategoryTree,
-  fetchCategory,
-  createCategory,
-  updateCategory,
-  deleteCategory,
-} from '../services/categories'
+import { fetchCategoryTree, updateCategory } from '../services/categories'
 
-const initialForm = {
-  id: null,
-  name: '',
-  slug: '',
-  parent: '',
-  description: '',
-  seo_title: '',
-  seo_description: '',
-  seo_keywords: '',
+const card = {
+  background: '#0f182b',
+  border: '1px solid #1f2a44',
+  borderRadius: 14,
+  padding: 16,
+  color: '#e2e8f0',
+  boxShadow: '0 18px 40px rgba(0,0,0,0.18)',
 }
 
-const flattenTree = (nodes, prefix = '') => {
-  let options = []
+const input = {
+  padding: '10px 12px',
+  borderRadius: 10,
+  border: '1px solid #1f2a44',
+  background: '#0b1324',
+  color: '#e2e8f0',
+  fontSize: 14,
+}
+
+const selectStyle = { ...input }
+
+const label = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  color: '#cbd5e1',
+  fontSize: 13,
+  fontWeight: 600,
+}
+
+const statusBadge = (isActive) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '4px 10px',
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  background: isActive ? 'rgba(34,197,94,0.14)' : 'rgba(248,113,113,0.14)',
+  color: isActive ? '#34d399' : '#f87171',
+})
+
+const featuredBadge = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '4px 8px',
+  borderRadius: 10,
+  fontSize: 12,
+  fontWeight: 700,
+  background: 'rgba(59,130,246,0.14)',
+  color: '#60a5fa',
+}
+
+const IconBox = ({ children }) => (
+  <div
+    style={{
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      border: '1px solid #1f2a44',
+      background: '#0b1324',
+      display: 'grid',
+      placeItems: 'center',
+      color: '#94a3b8',
+      fontWeight: 700,
+    }}
+  >
+    {children}
+  </div>
+)
+
+const flattenTree = (nodes, depth = 0) => {
+  let list = []
   nodes.forEach((node) => {
-    options.push({ id: node.id, label: `${prefix}${node.name}` })
+    list.push({ ...node, depth })
     if (node.children?.length) {
-      options = options.concat(flattenTree(node.children, `${prefix}-- `))
+      list = list.concat(flattenTree(node.children, depth + 1))
     }
   })
-  return options
+  return list
 }
-
-const collectDescendants = (node) => {
-  let ids = []
-  node.children?.forEach((child) => {
-    ids.push(child.id, ...collectDescendants(child))
-  })
-  return ids
-}
-
-const FieldError = ({ msg }) => (
-  <span style={{ color: 'red', fontSize: 12 }}>{Array.isArray(msg) ? msg.join(', ') : msg}</span>
-)
 
 function AdminCategories() {
   const navigate = useNavigate()
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState({})
-  const [form, setForm] = useState(initialForm)
-  const slugify = (val) =>
-    (val || '')
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+  const [filters, setFilters] = useState({ status: 'all', search: '' })
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await fetchCategoryTree()
-      setTree(data || [])
+      const treeData = await fetchCategoryTree()
+      setTree(Array.isArray(treeData) ? treeData : treeData?.results || [])
     } catch (err) {
       setError(err.message || 'Unable to load categories')
       if (err.message?.toLowerCase().includes('unauthorized')) {
@@ -71,271 +105,194 @@ function AdminCategories() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigate])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
-  const handleEdit = async (node) => {
-    setFieldErrors({})
-    try {
-      const full = await fetchCategory(node.id)
-      setForm({
-        id: full.id,
-        name: full.name || '',
-        slug: full.slug || '',
-        parent: full.parent || '',
-        description: full.description || '',
-        seo_title: full.seo_title || '',
-        seo_description: full.seo_description || '',
-        seo_keywords: full.seo_keywords || '',
-      })
-    } catch (err) {
-      setError(err.message || 'Unable to load category')
-    }
-  }
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this category?')) return
-    setError('')
-    try {
-      await deleteCategory(id)
-      await load()
-      if (form.id === id) {
-        setForm(initialForm)
+  const flatWithDepth = useMemo(() => {
+    const list = flattenTree(tree)
+    return list.filter((item) => {
+      if (filters.status === 'active' && !item.is_active) return false
+      if (filters.status === 'inactive' && item.is_active) return false
+      if (filters.search) {
+        const q = filters.search.toLowerCase()
+        return (
+          item.name?.toLowerCase().includes(q) ||
+          item.slug?.toLowerCase().includes(q) ||
+          item.seo_keywords?.toLowerCase().includes(q) ||
+          item.description?.toLowerCase().includes(q)
+        )
       }
-    } catch (err) {
-      setError(err.message || 'Unable to delete category')
-    }
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    setError('')
-    setFieldErrors({})
-    const payload = {
-      name: form.name,
-      slug: form.slug,
-      parent: form.parent || null,
-      description: form.description,
-      seo_title: form.seo_title,
-      seo_description: form.seo_description,
-      seo_keywords: form.seo_keywords,
-    }
-    try {
-      if (form.id) {
-        await updateCategory(form.id, payload)
-      } else {
-        await createCategory(payload)
-      }
-      await load()
-      setForm(initialForm)
-    } catch (err) {
-      setError(err.message || 'Unable to save category')
-      setFieldErrors(err.fields || {})
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleNameChange = (value) => {
-    setForm((f) => {
-      const next = { ...f, name: value }
-      if (!f.slug || f.slug === slugify(f.name || '')) {
-        next.slug = slugify(value)
-      }
-      return next
+      return true
     })
-  }
+  }, [tree, filters])
 
-  const findNode = (nodes, id) => {
-    for (const node of nodes) {
-      if (node.id === id) return node
-      if (node.children?.length) {
-        const child = findNode(node.children, id)
-        if (child) return child
+  const handleToggle = async (id, field, value) => {
+    try {
+      await updateCategory(id, { [field]: value })
+      load()
+    } catch (err) {
+      setError(err.message || 'Unable to update category')
+      if (err.message?.toLowerCase().includes('unauthorized')) {
+        navigate('/login', { replace: true })
       }
     }
-    return null
   }
 
-  const options = useMemo(() => flattenTree(tree), [tree])
-  const excludedIds = useMemo(() => {
-    if (!form.id) return []
-    const target = findNode(tree, form.id)
-    if (!target) return []
-    return [form.id, ...collectDescendants(target)]
-  }, [form.id, tree])
-
-  const availableParents = options.filter((opt) => !excludedIds.includes(opt.id))
-
-  const renderTree = (nodes, depth = 0) =>
-    nodes.map((node) => (
-      <div key={node.id} style={{ marginLeft: depth * 16, padding: '6px 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong>{node.name}</strong> <span style={{ color: '#6b7280' }}>({node.slug})</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={() => handleEdit(node)} style={smallButton}>
-              Edit
-            </button>
-            <button type="button" onClick={() => handleDelete(node.id)} style={smallDanger}>
-              Delete
-            </button>
-          </div>
-        </div>
-        {node.children?.length ? renderTree(node.children, depth + 1) : null}
-      </div>
-    ))
-
-  if (loading) return <div style={{ padding: 24 }}>Loading categories...</div>
+  if (loading) {
+    return <div style={{ padding: 24 }}>Loading categories...</div>
+  }
 
   return (
-    <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Categories</h2>
-          <Link to="/admin/dashboard" style={linkStyle}>
-            ƒ+? Back
-          </Link>
+    <div style={{ padding: 24, display: 'grid', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#f8fafc' }}>Categories</h2>
+          <p style={{ margin: '4px 0 0', color: '#cbd5e1' }}>Manage your product categories</p>
         </div>
-        <div style={card}>{tree.length ? renderTree(tree) : <p>No categories yet.</p>}</div>
+        <button
+          type="button"
+          onClick={() => navigate('/admin/categories/new')}
+          style={{
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid #2563eb',
+            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+            color: '#fff',
+            fontWeight: 700,
+          }}
+        >
+          + Add Category
+        </button>
       </div>
 
-      <div style={card}>
-        <h3 style={{ marginTop: 0 }}>{form.id ? 'Edit category' : 'Add category'}</h3>
-        {error ? <p style={{ color: 'red' }}>{error}</p> : null}
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 10 }}>
-          <label style={label}>
-            <span>Name</span>
-            <input
-              value={form.name}
-              onChange={(e) => handleNameChange(e.target.value)}
-              style={input}
-            />
-            {fieldErrors.name ? <FieldError msg={fieldErrors.name} /> : null}
-          </label>
-          <label style={label}>
-            <span>Slug</span>
-            <input
-              value={form.slug}
-              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-              style={input}
-            />
-            {fieldErrors.slug ? <FieldError msg={fieldErrors.slug} /> : null}
-          </label>
-          <label style={label}>
-            <span>Parent</span>
-            <select
-              value={form.parent}
-              onChange={(e) => setForm((f) => ({ ...f, parent: e.target.value }))}
-              style={input}
-            >
-              <option value="">None</option>
-              {availableParents.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            {fieldErrors.parent ? <FieldError msg={fieldErrors.parent} /> : null}
-          </label>
-          {renderField('Description', 'description', form, setForm, fieldErrors, true)}
-          {renderField('SEO Title', 'seo_title', form, setForm, fieldErrors)}
-          {renderField('SEO Description', 'seo_description', form, setForm, fieldErrors, true)}
-          {renderField('SEO Keywords', 'seo_keywords', form, setForm, fieldErrors)}
+      <div style={{ ...card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        <label style={label}>
+          <span>Filter by Status</span>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+            style={selectStyle}
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label style={label}>
+          <span>Search Categories</span>
+          <input
+            value={filters.search}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+            placeholder="Search by name or description..."
+            style={input}
+          />
+        </label>
+      </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-            <button type="submit" disabled={saving} style={buttonPrimary}>
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-            {form.id ? (
-              <button
-                type="button"
-                style={buttonSecondary}
-                onClick={() => {
-                  setForm(initialForm)
-                  setFieldErrors({})
-                }}
-              >
-                Cancel
-              </button>
-            ) : null}
-          </div>
-        </form>
+      {error ? <div style={{ ...card, color: '#f87171' }}>{error}</div> : null}
+
+      <div style={{ ...card, padding: 0 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={th}>Category</th>
+              <th style={th}>Slug</th>
+              <th style={th}>Products</th>
+              <th style={th}>Status</th>
+              <th style={th}>Featured</th>
+              <th style={th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {flatWithDepth.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ ...td, textAlign: 'center' }}>
+                  No categories found.
+                </td>
+              </tr>
+            ) : (
+              flatWithDepth.map((cat) => (
+                <tr key={cat.id} style={{ borderBottom: '1px solid #1f2a44' }}>
+                  <td style={td}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: cat.depth * 16 }}>
+                      <IconBox>
+                        <span aria-label="folder">Folder</span>
+                      </IconBox>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#f8fafc' }}>{cat.name}</div>
+                        <div style={{ color: '#94a3b8', fontSize: 12 }}>
+                          {cat.description
+                            ? `${cat.description.slice(0, 50)}${cat.description.length > 50 ? '...' : ''}`
+                            : 'No description'}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          {cat.featured ? <span style={featuredBadge}>Featured</span> : null}
+                          {cat.seo_keywords ? <span style={{ ...pill }}>{cat.seo_keywords.split(',').slice(0, 3).join(', ')}</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={td}>{cat.slug}</td>
+                  <td style={td}>{cat.product_count ?? 0}</td>
+                  <td style={td}>
+                    <span style={statusBadge(cat.is_active)}>{cat.is_active ? 'Active' : 'Inactive'}</span>
+                  </td>
+                  <td style={td}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!cat.featured}
+                        onChange={(e) => handleToggle(cat.id, 'featured', e.target.checked)}
+                      />
+                      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{cat.featured ? 'On' : 'Off'}</span>
+                    </label>
+                  </td>
+                  <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Link to={`/admin/categories/${cat.id}`} style={linkButton}>
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(cat.id, 'is_active', !cat.is_active)}
+                      style={linkButton}
+                    >
+                      {cat.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 }
 
-const renderField = (labelText, field, form, setForm, fieldErrors, multiline = false) => (
-  <label style={label}>
-    <span>{labelText}</span>
-    {multiline ? (
-      <textarea
-        value={form[field]}
-        onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-        style={{ ...input, minHeight: 80 }}
-      />
-    ) : (
-      <input
-        value={form[field]}
-        onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-        style={input}
-      />
-    )}
-    {fieldErrors[field] ? <FieldError msg={fieldErrors[field]} /> : null}
-  </label>
-)
+const th = { textAlign: 'left', padding: '10px 8px', fontSize: 13, color: '#cbd5e1', borderBottom: '1px solid #1f2a44' }
+const td = { padding: '12px 8px', fontSize: 14, color: '#e2e8f0', borderBottom: '1px solid #0f172a' }
 
-const card = {
-  border: '1px solid #e5e7eb',
+const linkButton = {
+  padding: '8px 10px',
   borderRadius: 10,
-  padding: 16,
-  background: '#fff',
-}
-
-const label = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-}
-
-const input = {
-  padding: '10px 12px',
-  borderRadius: 8,
-  border: '1px solid #d1d5db',
-}
-
-const linkStyle = {
-  color: '#2563eb',
+  border: '1px solid #1f2a44',
+  background: '#0b1324',
+  color: '#e2e8f0',
+  fontWeight: 600,
   textDecoration: 'none',
-  fontSize: 14,
-}
-
-const smallButton = {
-  padding: '6px 10px',
-  background: '#111827',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 6,
   cursor: 'pointer',
 }
 
-const smallDanger = { ...smallButton, background: '#b91c1c' }
-
-const buttonPrimary = {
-  padding: '10px 14px',
-  background: '#111827',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 8,
-  cursor: 'pointer',
+const pill = {
+  padding: '4px 8px',
+  borderRadius: 999,
+  background: '#0b1324',
+  border: '1px solid #1f2a44',
+  color: '#cbd5e1',
+  fontSize: 12,
 }
-
-const buttonSecondary = { ...buttonPrimary, background: '#6b7280' }
 
 export default AdminCategories

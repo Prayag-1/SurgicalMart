@@ -2,9 +2,24 @@ import { clearTokens, getAccessToken } from '../utils/tokenStorage'
 
 const BASE_URL = 'http://127.0.0.1:8000'
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${getAccessToken()}`,
-})
+const getTokenOrThrow = () => {
+  const token = getAccessToken()
+  if (!token) {
+    clearTokens()
+    throw new Error('Unauthorized. Please log in again.')
+  }
+  return token
+}
+
+const authHeaders = (useJson = true) => {
+  const headers = {
+    Authorization: `Bearer ${getTokenOrThrow()}`,
+  }
+  if (useJson) {
+    headers['Content-Type'] = 'application/json'
+  }
+  return headers
+}
 
 const handleResponse = async (response) => {
   const payload = await response.json().catch(() => ({}))
@@ -24,8 +39,26 @@ const handleResponse = async (response) => {
   return payload
 }
 
-export const fetchBrands = async () => {
-  const res = await fetch(`${BASE_URL}/api/admin/brands/`, {
+const toQueryString = (params = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    search.append(key, value)
+  })
+  const qs = search.toString()
+  return qs ? `?${qs}` : ''
+}
+
+export const fetchBrands = async (params = {}) => {
+  const res = await fetch(`${BASE_URL}/api/admin/brands/${toQueryString(params)}`, {
+    method: 'GET',
+    headers: authHeaders(),
+  })
+  return handleResponse(res)
+}
+
+export const fetchBrand = async (id) => {
+  const res = await fetch(`${BASE_URL}/api/admin/brands/${id}/`, {
     method: 'GET',
     headers: authHeaders(),
   })
@@ -33,33 +66,21 @@ export const fetchBrands = async () => {
 }
 
 export const createBrand = async (payload) => {
-  const formData = new FormData()
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      formData.append(key, value)
-    }
-  })
-
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData
   const res = await fetch(`${BASE_URL}/api/admin/brands/`, {
     method: 'POST',
-    headers: authHeaders(),
-    body: formData,
+    headers: authHeaders(!isForm),
+    body: isForm ? payload : JSON.stringify(payload),
   })
   return handleResponse(res)
 }
 
 export const updateBrand = async (id, payload) => {
-  const formData = new FormData()
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      formData.append(key, value)
-    }
-  })
-
+  const isForm = typeof FormData !== 'undefined' && payload instanceof FormData
   const res = await fetch(`${BASE_URL}/api/admin/brands/${id}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
-    body: formData,
+    headers: authHeaders(!isForm),
+    body: isForm ? payload : JSON.stringify(payload),
   })
   return handleResponse(res)
 }

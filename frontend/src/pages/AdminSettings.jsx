@@ -73,7 +73,7 @@ function AdminSettings() {
     <div style={{ padding: 24, maxWidth: 720 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>Admin Settings</h2>
-        <Link to="/admin/dashboard" style={linkStyle}>
+        <Link to="/admin" style={linkStyle}>
           Back
         </Link>
       </div>
