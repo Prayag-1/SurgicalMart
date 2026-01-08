@@ -28,11 +28,11 @@ def generate_invoice_pdf(order, invoice_number=None):
     c.setFont("Helvetica", 11)
     c.drawString(50, y, f"Invoice for Order #{order.id}")
     y -= 15
-    c.drawString(50, y, f"Customer: {order.full_name}")
+    c.drawString(50, y, f"Customer: {order.customer_name}")
     y -= 15
     c.drawString(50, y, f"Phone: {order.phone}")
     y -= 15
-    c.drawString(50, y, f"Email: {order.email}")
+    c.drawString(50, y, f"Email: {order.customer_email}")
     y -= 15
     c.drawString(50, y, "Address:")
     y -= 15

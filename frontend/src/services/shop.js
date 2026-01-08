@@ -1,4 +1,4 @@
-const BASE_URL = 'http://127.0.0.1:8000'
+import { BASE_URL } from './apiClient'
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -95,5 +95,10 @@ export const checkout = async (payload) => {
     credentials: 'include',
     body: JSON.stringify(payload),
   })
+  return handleResponse(res)
+}
+
+export const fetchHomepageConfig = async () => {
+  const res = await fetch(`${BASE_URL}/api/shop/homepage/`, { method: 'GET' })
   return handleResponse(res)
 }

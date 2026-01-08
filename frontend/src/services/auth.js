@@ -1,6 +1,5 @@
 import { clearTokens } from '../utils/tokenStorage'
-
-const BASE_URL = 'http://127.0.0.1:8000'
+import { BASE_URL } from './apiClient'
 
 export const login = async (email, password) => {
   const response = await fetch(`${BASE_URL}/api/auth/login/`, {

@@ -169,9 +169,9 @@ function AdminDashboard() {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 700, color: '#f8fafc' }}>#{order.id}</div>
+                    <div style={{ fontWeight: 700, color: '#f8fafc' }}>{order.order_number || `#${order.id}`}</div>
                     <div style={{ color: '#94a3b8', fontSize: 13 }}>
-                      {order.full_name || 'Customer'} · {order.phone || '—'}
+                      {order.customer_name || 'Customer'} · {order.phone || '—'}
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 12 }}>{formatDate(order.created_at)}</div>
                   </div>
@@ -286,3 +286,4 @@ const ghostButton = {
 }
 
 export default AdminDashboard
+

@@ -38,7 +38,7 @@ def send_order_placed(order: Order):
     admin_settings = _get_settings()
 
     subject = f"New order #{order.id}"
-    body = f"Order #{order.id} placed by {order.full_name} ({order.email}, {order.phone})"
+    body = f"Order #{order.id} placed by {order.customer_name} ({order.customer_email}, {order.phone})"
 
     if admin_settings.notify_admin_email and admin_settings.admin_notification_email:
         _send_email(subject, body, [admin_settings.admin_notification_email])
@@ -46,11 +46,11 @@ def send_order_placed(order: Order):
     if admin_settings.notify_admin_whatsapp and admin_settings.admin_notification_phone:
         _send_whatsapp(body, admin_settings.admin_notification_phone, admin_settings)
 
-    if admin_settings.notify_customer_email and order.email:
+    if admin_settings.notify_customer_email and order.customer_email:
         _send_email(
             subject=f"Your order #{order.id} is placed",
             body="Thank you for your order. We will confirm soon.",
-            recipients=[order.email],
+            recipients=[order.customer_email],
         )
 
     if admin_settings.notify_customer_whatsapp and order.phone:
@@ -65,11 +65,11 @@ def send_cod_confirmed(order: Order):
     if admin_settings.notify_admin_whatsapp and admin_settings.admin_notification_phone:
         _send_whatsapp(body_admin, admin_settings.admin_notification_phone, admin_settings)
 
-    if admin_settings.notify_customer_email and order.email:
+    if admin_settings.notify_customer_email and order.customer_email:
         _send_email(
             subject=f"Order #{order.id} payment confirmed",
             body="We have received your COD payment.",
-            recipients=[order.email],
+            recipients=[order.customer_email],
         )
     if admin_settings.notify_customer_whatsapp and order.phone:
         _send_whatsapp(f"Payment received for order #{order.id}", order.phone, admin_settings)
@@ -83,11 +83,11 @@ def send_order_shipped(order: Order):
     if admin_settings.notify_admin_whatsapp and admin_settings.admin_notification_phone:
         _send_whatsapp(body_admin, admin_settings.admin_notification_phone, admin_settings)
 
-    if admin_settings.notify_customer_email and order.email:
+    if admin_settings.notify_customer_email and order.customer_email:
         _send_email(
             subject=f"Your order #{order.id} is shipped",
             body="Your order is on the way.",
-            recipients=[order.email],
+            recipients=[order.customer_email],
         )
     if admin_settings.notify_customer_whatsapp and order.phone:
         _send_whatsapp(f"Order #{order.id} shipped", order.phone, admin_settings)
@@ -98,11 +98,11 @@ def send_invoice_email(order: Order):
     if not getattr(order, "invoice", None):
         return
 
-    if admin_settings.notify_customer_email and order.email:
+    if admin_settings.notify_customer_email and order.customer_email:
         _send_email(
             subject=f"Invoice #{order.invoice.number} for order #{order.id}",
             body="Your invoice is ready.",
-            recipients=[order.email],
+            recipients=[order.customer_email],
         )
 
     if admin_settings.notify_admin_email and admin_settings.admin_notification_email:

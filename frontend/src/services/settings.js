@@ -1,43 +1,32 @@
-import { getAccessToken, clearTokens } from '../utils/tokenStorage'
+import { apiRequest } from './apiClient'
 
-const BASE_URL = 'http://127.0.0.1:8000'
+export const getSettings = async () => apiRequest(`/api/admin/settings/`, { method: 'GET' })
 
-const authHeaders = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${getAccessToken()}`,
-})
+export const updateSettings = async (payload) =>
+  apiRequest(`/api/admin/settings/`, { method: 'PATCH', body: payload })
 
-const handleResponse = async (response) => {
-  const payload = await response.json().catch(() => ({}))
+export const getHomepageSettings = async () =>
+  apiRequest(`/api/admin/settings/homepage/`, { method: 'GET' })
 
-  if (response.status === 401 || response.status === 403) {
-    clearTokens()
-    throw new Error('Unauthorized. Please log in again.')
-  }
+export const updateHomepageSettings = async (payload) =>
+  apiRequest(`/api/admin/settings/homepage/`, { method: 'PATCH', body: payload })
 
-  if (!response.ok) {
-    const detail = payload.detail || 'Unable to complete the request'
-    const err = new Error(detail)
-    err.fields = payload
-    throw err
-  }
+const useJsonForPayload = (payload) => !(typeof FormData !== 'undefined' && payload instanceof FormData)
 
-  return payload
-}
+export const fetchSlides = async () => apiRequest(`/api/admin/settings/slides/`, { method: 'GET' })
 
-export const getSettings = async () => {
-  const res = await fetch(`${BASE_URL}/api/admin/settings/`, {
-    method: 'GET',
-    headers: authHeaders(),
+export const createSlide = async (payload) =>
+  apiRequest(`/api/admin/settings/slides/`, {
+    method: 'POST',
+    body: payload,
+    useJson: useJsonForPayload(payload),
   })
-  return handleResponse(res)
-}
 
-export const updateSettings = async (payload) => {
-  const res = await fetch(`${BASE_URL}/api/admin/settings/`, {
+export const updateSlide = async (id, payload) =>
+  apiRequest(`/api/admin/settings/slides/${id}/`, {
     method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+    body: payload,
+    useJson: useJsonForPayload(payload),
   })
-  return handleResponse(res)
-}
+
+export const deleteSlide = async (id) => apiRequest(`/api/admin/settings/slides/${id}/`, { method: 'DELETE' })

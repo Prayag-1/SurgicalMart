@@ -21,8 +21,8 @@ class AdminOrderAuditTests(APITestCase):
             username="customer", email="customer@example.com", password="pass123", is_staff=False
         )
         self.order = Order.objects.create(
-            full_name="John Doe",
-            email="john@example.com",
+            customer_name="John Doe",
+            customer_email="john@example.com",
             phone="1234567890",
             address="123 Street",
             total_amount=100,
@@ -122,8 +122,8 @@ class AdminOrderTimelineTests(APITestCase):
             username="customer", email="customer@example.com", password="pass123", is_staff=False
         )
         self.order = Order.objects.create(
-            full_name="Jane Doe",
-            email="jane@example.com",
+            customer_name="Jane Doe",
+            customer_email="jane@example.com",
             phone="0987654321",
             address="456 Street",
             total_amount=150,
@@ -155,8 +155,8 @@ class AdminOrderTimelineTests(APITestCase):
             actor=self.staff_user,
             actor_email_snapshot=self.staff_user.email,
             from_status=Order.STATUS_CONFIRMED,
-            to_status=Order.STATUS_PACKED,
-            reason="Packed",
+            to_status=Order.STATUS_SHIPPED,
+            reason="Shipped",
         )
         OrderStatusAuditLog.objects.filter(id=audit2.id).update(created_at=now - timedelta(minutes=1))
 
@@ -168,7 +168,7 @@ class AdminOrderTimelineTests(APITestCase):
         events = response.json()
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0]["event_type"], "status_change")
-        self.assertEqual(events[0]["to_status"], Order.STATUS_PACKED)
+        self.assertEqual(events[0]["to_status"], Order.STATUS_SHIPPED)
         self.assertEqual(events[1]["event_type"], "note")
         self.assertTrue(events[1]["is_pinned"])
         self.assertEqual(events[2]["from_status"], Order.STATUS_PENDING)

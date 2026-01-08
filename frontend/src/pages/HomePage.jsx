@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listProducts, listCategories } from '../services/shop'
+import { listProducts, listCategories, fetchHomepageConfig } from '../services/shop'
 
 const grid = {
   display: 'grid',
@@ -18,21 +18,28 @@ const card = {
 function HomePage() {
   const [featured, setFeatured] = useState([])
   const [categories, setCategories] = useState([])
+  const [homepageConfig, setHomepageConfig] = useState(null)
+  const [slides, setSlides] = useState([])
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [cats, prods] = await Promise.all([
+        const [cats, prods, config] = await Promise.all([
           listCategories(),
           listProducts({ is_featured: true }),
+          fetchHomepageConfig().catch(() => null),
         ])
         const catList = Array.isArray(cats) ? cats : cats?.results || []
         const prodList = Array.isArray(prods) ? prods : prods?.results || []
-        setCategories(catList)
-        setFeatured(prodList)
+        setCategories((config?.homepage?.featured_categories?.length ? config.homepage.featured_categories : catList) || [])
+        setFeatured((config?.homepage?.new_arrivals?.length ? config.homepage.new_arrivals : prodList) || [])
+        setHomepageConfig(config?.homepage || null)
+        setSlides(config?.slides || [])
       } catch {
         setCategories([])
         setFeatured([])
+        setHomepageConfig(null)
+        setSlides([])
       }
     }
     load()
@@ -40,22 +47,55 @@ function HomePage() {
 
   return (
     <div style={{ padding: 24, display: 'grid', gap: 24 }}>
-      <section style={{ display: 'grid', gap: 12 }}>
-        <h1 style={{ margin: 0 }}>Surgical Mart Nepal</h1>
-        <p style={{ margin: 0, color: '#6b7280' }}>
-          Reliable surgical supplies with fast delivery across Nepal. No accounts, just order and we handle the rest.
-        </p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link to="/products" style={button}>
-            Browse products
-          </Link>
-          <a href="tel:+977-0000000" style={buttonSecondary}>
-            Call us
-          </a>
-        </div>
-      </section>
+      {slides.length ? (
+        <section style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <h1 style={{ margin: 0 }}>Surgical Mart Nepal</h1>
+            <p style={{ margin: 0, color: '#6b7280' }}>Trusted supplies curated for your homepage.</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+            {slides.map((slide) => (
+              <a
+                href={slide.link_url || '#'}
+                key={slide.id}
+                style={{
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  border: '1px solid #e5e7eb',
+                  background: '#000',
+                  height: 180,
+                  display: 'block',
+                }}
+              >
+                {slide.image_url || slide.image ? (
+                  <img
+                    src={slide.image_url || slide.image}
+                    alt="Hero slide"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : null}
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section style={{ display: 'grid', gap: 12 }}>
+          <h1 style={{ margin: 0 }}>Surgical Mart Nepal</h1>
+          <p style={{ margin: 0, color: '#6b7280' }}>
+            Reliable surgical supplies with fast delivery across Nepal. No accounts, just order and we handle the rest.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Link to="/products" style={button}>
+              Browse products
+            </Link>
+            <a href="tel:+977-0000000" style={buttonSecondary}>
+              Call us
+            </a>
+          </div>
+        </section>
+      )}
 
-      <section>
+      <section style={{ display: 'grid', gap: 12 }}>
         <h3>Categories</h3>
         <div style={grid}>
           {categories.slice(0, 6).map((cat) => (
@@ -84,6 +124,20 @@ function HomePage() {
           ))}
         </div>
       </section>
+
+      {homepageConfig?.featured_brands?.length ? (
+        <section>
+          <h3>Brands</h3>
+          <div style={grid}>
+            {homepageConfig.featured_brands.map((brand) => (
+              <div key={brand.id} style={card}>
+                <div style={{ fontWeight: 700 }}>{brand.name}</div>
+                <p style={{ color: '#6b7280', fontSize: 13 }}>{brand.slug}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <footer style={card}>
         <h4>Need help?</h4>

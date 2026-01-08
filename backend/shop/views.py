@@ -5,13 +5,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 
-from .models import Category, Product, BulkInquiry, Order, OrderItem
+from .models import Category, Product, BulkInquiry, Order, OrderItem, HomepageSection, HeroSlide
 from .notifications import send_order_placed
 from .serializers import (
     CategorySerializer,
     ProductSerializer,
     BulkInquirySerializer,
     OrderSerializer,
+    HomepageSettingsSerializer,
+    HeroSlideSerializer,
 )
 from .cart import Cart
 
@@ -132,12 +134,12 @@ class CartClearView(APIView):
 # --------------------------------------------------
 class CheckoutView(APIView):
     def post(self, request):
-        full_name = request.data.get("full_name")
-        email = request.data.get("email")
-        phone = request.data.get("phone")
+        customer_name = request.data.get("full_name") or request.data.get("customer_name")
+        email = request.data.get("email") or request.data.get("customer_email")
+        phone = request.data.get("phone") or request.data.get("customer_phone")
         address = request.data.get("address")
 
-        if not all([full_name, email, phone, address]):
+        if not all([customer_name, email, phone, address]):
             return Response({"error": "All fields are required."}, status=400)
 
         cart = Cart(request)
@@ -148,8 +150,8 @@ class CheckoutView(APIView):
 
         # Create order
         order = Order.objects.create(
-            full_name=full_name,
-            email=email,
+            customer_name=customer_name,
+            customer_email=email,
             phone=phone,
             address=address,
             total_amount=cart.get_total(),
@@ -201,8 +203,8 @@ class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
 
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
-    search_fields = ["full_name", "email", "phone"]
-    filterset_fields = ["status"]
+    search_fields = ["order_number", "customer_name", "customer_email", "phone"]
+    filterset_fields = ["status", "payment_status"]
 
 
 # --------------------------------------------------
@@ -212,7 +214,7 @@ class OrderTrackingView(APIView):
     def get(self, request):
         order_id = request.query_params.get("order_id")
         phone = request.query_params.get("phone")
-        email = request.query_params.get("email")
+        email = request.query_params.get("email") or request.query_params.get("customer_email")
 
         if not order_id:
             return Response({"error": "Order ID required."}, status=400)
@@ -222,7 +224,7 @@ class OrderTrackingView(APIView):
         if phone:
             order = order.filter(phone=phone)
         if email:
-            order = order.filter(email=email)
+            order = order.filter(customer_email=email)
 
         order = order.first()
 
@@ -231,4 +233,20 @@ class OrderTrackingView(APIView):
 
         serializer = OrderSerializer(order)
         return Response(serializer.data)
+
+
+# --------------------------------------------------
+# HOMEPAGE CONFIG (PUBLIC)
+# --------------------------------------------------
+class HomepageConfigView(APIView):
+    def get(self, request):
+        homepage, _ = HomepageSection.objects.get_or_create(id=1)
+        slides = HeroSlide.objects.filter(is_active=True).order_by("order", "id")
+
+        return Response(
+            {
+                "homepage": HomepageSettingsSerializer(homepage, context={"request": request}).data,
+                "slides": HeroSlideSerializer(slides, many=True, context={"request": request}).data,
+            }
+        )
 

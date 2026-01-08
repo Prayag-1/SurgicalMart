@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Product, BulkInquiry, Order, OrderItem
+from .models import Category, Product, BulkInquiry, Order, OrderItem, Brand, HeroSlide, HomepageSection
 
 
 # -----------------------------
@@ -26,6 +26,17 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 # -----------------------------
+# BRAND ADMIN
+# -----------------------------
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "is_active", "featured", "created_at")
+    list_filter = ("is_active", "featured")
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+
+
+# -----------------------------
 # BULK INQUIRY ADMIN
 # -----------------------------
 @admin.register(BulkInquiry)
@@ -49,10 +60,26 @@ class OrderItemInline(admin.TabularInline):
 # -----------------------------
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "full_name", "phone", "total_amount", "status", "created_at")
-    list_filter = ("status", "created_at")
-    search_fields = ("full_name", "email", "phone")
+    list_display = ("order_number", "customer_name", "phone", "total_amount", "status", "payment_status", "created_at")
+    list_filter = ("status", "payment_status", "created_at")
+    search_fields = ("order_number", "customer_name", "customer_email", "phone")
     ordering = ("-created_at",)
 
     list_editable = ("status",)
     inlines = [OrderItemInline]
+
+
+# -----------------------------
+# HOMEPAGE CONFIG
+# -----------------------------
+@admin.register(HeroSlide)
+class HeroSlideAdmin(admin.ModelAdmin):
+    list_display = ("id", "order", "is_active", "link_url", "created_at")
+    list_editable = ("order", "is_active")
+    search_fields = ("link_url",)
+    ordering = ("order", "id")
+
+
+@admin.register(HomepageSection)
+class HomepageSectionAdmin(admin.ModelAdmin):
+    filter_horizontal = ("new_arrivals", "featured_categories", "featured_brands")

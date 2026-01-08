@@ -1,3 +1,4 @@
+from django.utils.text import slugify
 from rest_framework import serializers
 from .models import (
     Category,
@@ -9,6 +10,8 @@ from .models import (
     OrderAdminNote,
     Brand,
     AdminSetting,
+    HeroSlide,
+    HomepageSection,
 )
 
 
@@ -55,9 +58,34 @@ class CategoryWriteSerializer(serializers.ModelSerializer):
 
 
 class BrandSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Brand
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "logo",
+            "logo_url",
+            "is_active",
+            "featured",
+            "seo_title",
+            "seo_description",
+            "seo_keywords",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        request = self.context.get("request")
+        url = obj.logo.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class BrandWriteSerializer(serializers.ModelSerializer):
@@ -77,12 +105,22 @@ class BrandWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate_slug(self, value):
+        slug_value = slugify(value or "")
+        if not slug_value:
+            raise serializers.ValidationError("Slug is required.")
+
         qs = Brand.objects.all()
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
-        if qs.filter(slug__iexact=value).exists():
+        if qs.filter(slug__iexact=slug_value).exists():
             raise serializers.ValidationError("Slug must be unique.")
-        return value
+        return slug_value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("slug") and attrs.get("name"):
+            attrs["slug"] = slugify(attrs["name"])
+        return attrs
 
 
 class AdminSettingSerializer(serializers.ModelSerializer):
@@ -124,15 +162,44 @@ class AdminSettingSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     brand = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "category",
+            "brand",
+            "short_description",
+            "description",
+            "price",
+            "sku",
+            "stock",
+            "image",
+            "image_url",
+            "is_featured",
+            "is_active",
+            "seo_title",
+            "seo_description",
+            "seo_keywords",
+            "created_at",
+        ]
 
     def get_brand(self, obj):
         if obj.brand:
             return {"id": obj.brand.id, "name": obj.brand.name, "slug": obj.brand.slug}
         return None
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 # --------------------------
@@ -160,6 +227,25 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "seo_keywords",
         ]
 
+    def validate_slug(self, value):
+        slug_value = slugify(value or "")
+        if not slug_value:
+            raise serializers.ValidationError("Slug is required.")
+        qs = Product.objects.all()
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.filter(slug__iexact=slug_value).exists():
+            raise serializers.ValidationError("Slug must be unique.")
+        return slug_value
+
+    def validate_sku(self, value):
+        qs = Product.objects.all()
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.filter(sku__iexact=value).exists():
+            raise serializers.ValidationError("SKU must be unique.")
+        return value
+
     def validate_price(self, value):
         if value < 0:
             raise serializers.ValidationError("Price must be greater than or equal to 0.")
@@ -169,6 +255,12 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Stock must be greater than or equal to 0.")
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("slug") and attrs.get("name"):
+            attrs["slug"] = slugify(attrs["name"])
+        return attrs
 
 
 # --------------------------
@@ -204,8 +296,9 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id",
-            "full_name",
-            "email",
+            "order_number",
+            "customer_name",
+            "customer_email",
             "phone",
             "address",
             "total_amount",
@@ -359,3 +452,136 @@ class OrderAdminNoteSerializer(serializers.ModelSerializer):
 class ShipmentSerializer(serializers.Serializer):
     courier_name = serializers.CharField(max_length=100)
     tracking_number = serializers.CharField(max_length=100)
+
+
+# --------------------------
+# HOMEPAGE SETTINGS SERIALIZERS
+# --------------------------
+class MiniCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "slug"]
+
+
+class MiniBrandSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Brand
+        fields = ["id", "name", "slug", "logo_url"]
+
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        request = self.context.get("request")
+        url = obj.logo.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+
+class MiniProductSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = ["id", "name", "slug", "price", "image_url"]
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+
+class HeroSlideSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HeroSlide
+        fields = [
+            "id",
+            "image",
+            "image_url",
+            "link_url",
+            "order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        extra_kwargs = {
+            "image": {"required": False, "allow_null": True},
+        }
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not self.instance and not attrs.get("image"):
+            raise serializers.ValidationError({"image": "Image is required."})
+        return attrs
+
+
+class HomepageSettingsSerializer(serializers.ModelSerializer):
+    new_arrivals = MiniProductSerializer(many=True, read_only=True)
+    featured_categories = MiniCategorySerializer(many=True, read_only=True)
+    featured_brands = MiniBrandSerializer(many=True, read_only=True)
+
+    new_arrival_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), many=True, write_only=True, required=False, source="new_arrivals"
+    )
+    featured_category_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), many=True, write_only=True, required=False, source="featured_categories"
+    )
+    featured_brand_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(), many=True, write_only=True, required=False, source="featured_brands"
+    )
+
+    class Meta:
+        model = HomepageSection
+        fields = [
+            "id",
+            "new_arrivals",
+            "featured_categories",
+            "featured_brands",
+            "new_arrival_ids",
+            "featured_category_ids",
+            "featured_brand_ids",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def update(self, instance, validated_data):
+        m2m_updates = {}
+        for key in ["new_arrivals", "featured_categories", "featured_brands"]:
+            if key in validated_data:
+                m2m_updates[key] = validated_data.pop(key)
+
+        instance = super().update(instance, validated_data)
+
+        for field, values in m2m_updates.items():
+            getattr(instance, field).set(values)
+
+        return instance
+
+    def create(self, validated_data):
+        m2m_updates = {}
+        for key in ["new_arrivals", "featured_categories", "featured_brands"]:
+            if key in validated_data:
+                m2m_updates[key] = validated_data.pop(key)
+
+        instance = super().create(validated_data)
+        for field, values in m2m_updates.items():
+            getattr(instance, field).set(values)
+        return instance

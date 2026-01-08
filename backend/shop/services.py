@@ -11,8 +11,7 @@ from .utils import generate_invoice_pdf
 
 ALLOWED_ORDER_TRANSITIONS = {
     Order.STATUS_PENDING: {Order.STATUS_CONFIRMED, Order.STATUS_CANCELLED},
-    Order.STATUS_CONFIRMED: {Order.STATUS_PACKED, Order.STATUS_CANCELLED},
-    Order.STATUS_PACKED: {Order.STATUS_SHIPPED, Order.STATUS_CANCELLED},
+    Order.STATUS_CONFIRMED: {Order.STATUS_SHIPPED, Order.STATUS_CANCELLED},
     Order.STATUS_SHIPPED: {Order.STATUS_DELIVERED},
     Order.STATUS_DELIVERED: set(),
     Order.STATUS_CANCELLED: set(),
@@ -119,10 +118,10 @@ def mark_cod_received(order_id: int, actor=None) -> Order:
         if order.payment_method != Order.PAYMENT_METHOD_COD:
             raise ValidationError({"detail": "Only COD payments can be marked as received."})
 
-        if order.payment_status == Order.PAYMENT_STATUS_CONFIRMED:
+        if order.payment_status == Order.PAYMENT_STATUS_PAID:
             return order
 
-        order.payment_status = Order.PAYMENT_STATUS_CONFIRMED
+        order.payment_status = Order.PAYMENT_STATUS_PAID
         order.save(update_fields=["payment_status", "updated_at"])
 
         # Record as admin note to surface in timeline
@@ -150,7 +149,7 @@ def generate_invoice(order: Order, actor=None) -> Invoice:
     if getattr(order, "invoice", None):
         return order.invoice
 
-    if order.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+    if order.payment_status != Order.PAYMENT_STATUS_PAID:
         raise ValidationError({"detail": "Invoice can only be generated after payment confirmation."})
 
     with transaction.atomic():
@@ -183,7 +182,7 @@ def generate_invoice(order: Order, actor=None) -> Invoice:
 
 
 def add_shipment_details(order: Order, courier_name: str, tracking_number: str, actor=None) -> Order:
-    if order.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+    if order.payment_status != Order.PAYMENT_STATUS_PAID:
         raise ValidationError({"detail": "Shipment can only be added after payment confirmation."})
 
     if order.status in {Order.STATUS_CANCELLED, Order.STATUS_DELIVERED}:
@@ -193,7 +192,7 @@ def add_shipment_details(order: Order, courier_name: str, tracking_number: str, 
         order_locked = Order.objects.select_for_update().get(pk=order.pk)
 
         # Refresh to ensure latest state
-        if order_locked.payment_status != Order.PAYMENT_STATUS_CONFIRMED:
+        if order_locked.payment_status != Order.PAYMENT_STATUS_PAID:
             raise ValidationError({"detail": "Shipment can only be added after payment confirmation."})
         if order_locked.status in {Order.STATUS_CANCELLED, Order.STATUS_DELIVERED}:
             raise ValidationError({"detail": "Shipment cannot be added for delivered or cancelled orders."})

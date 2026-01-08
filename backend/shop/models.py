@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.db.models import Index
 from django.db.models.functions import Lower
@@ -107,6 +109,40 @@ class Product(models.Model):
         ]
 
 
+class HeroSlide(models.Model):
+    image = models.ImageField(upload_to="hero/")
+    link_url = models.URLField(blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        indexes = [
+            Index(fields=["order"]),
+            Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        return f"Hero Slide #{self.pk or 'new'}"
+
+
+class HomepageSection(models.Model):
+    new_arrivals = models.ManyToManyField(Product, blank=True, related_name="homepage_new_arrivals")
+    featured_categories = models.ManyToManyField(Category, blank=True, related_name="homepage_featured_categories")
+    featured_brands = models.ManyToManyField(Brand, blank=True, related_name="homepage_featured_brands")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Homepage Section"
+        verbose_name_plural = "Homepage Sections"
+
+    def __str__(self):
+        return "Homepage configuration"
+
+
 class BulkInquiry(models.Model):
     name = models.CharField(max_length=150)
     email = models.EmailField()
@@ -121,9 +157,11 @@ class BulkInquiry(models.Model):
 
 
 class Order(models.Model):
+    def _default_order_number():
+        return f"SMN-{uuid.uuid4().hex[:10].upper()}"
+
     STATUS_PENDING = "PENDING"
     STATUS_CONFIRMED = "CONFIRMED"
-    STATUS_PACKED = "PACKED"
     STATUS_SHIPPED = "SHIPPED"
     STATUS_DELIVERED = "DELIVERED"
     STATUS_CANCELLED = "CANCELLED"
@@ -131,14 +169,15 @@ class Order(models.Model):
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_CONFIRMED, "Confirmed"),
-        (STATUS_PACKED, "Packed"),
         (STATUS_SHIPPED, "Shipped"),
         (STATUS_DELIVERED, "Delivered"),
         (STATUS_CANCELLED, "Cancelled"),
     ]
 
-    full_name = models.CharField(max_length=150)
-    email = models.EmailField()
+    order_number = models.CharField(max_length=32, unique=True, default=_default_order_number, editable=False)
+
+    customer_name = models.CharField(max_length=150)
+    customer_email = models.EmailField()
     phone = models.CharField(max_length=20)
     address = models.TextField()
 
@@ -160,11 +199,13 @@ class Order(models.Model):
         (PAYMENT_METHOD_COD, "Cash on Delivery"),
     ]
 
-    PAYMENT_STATUS_PENDING = "pending"
-    PAYMENT_STATUS_CONFIRMED = "confirmed"
+    PAYMENT_STATUS_PENDING = "PENDING"
+    PAYMENT_STATUS_PAID = "PAID"
+    PAYMENT_STATUS_FAILED = "FAILED"
     PAYMENT_STATUS_CHOICES = [
         (PAYMENT_STATUS_PENDING, "Pending"),
-        (PAYMENT_STATUS_CONFIRMED, "Confirmed"),
+        (PAYMENT_STATUS_PAID, "Paid"),
+        (PAYMENT_STATUS_FAILED, "Failed"),
     ]
 
     payment_method = models.CharField(
@@ -185,10 +226,11 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order #{self.id} - {self.full_name}"
+        return f"Order {self.order_number} - {self.customer_name}"
 
     class Meta:
         indexes = [
+            Index(fields=["order_number"]),
             Index(fields=["status"]),
             Index(fields=["created_at"]),
             Index(fields=["payment_status"]),

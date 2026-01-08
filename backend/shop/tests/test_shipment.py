@@ -20,18 +20,18 @@ class ShipmentTests(APITestCase):
         )
         self.client = APIClient()
         self.order = Order.objects.create(
-            full_name="Test User",
-            email="test@example.com",
+            customer_name="Test User",
+            customer_email="test@example.com",
             phone="123456",
             address="Somewhere",
             total_amount=50,
-            payment_status=Order.PAYMENT_STATUS_CONFIRMED,
+            payment_status=Order.PAYMENT_STATUS_PAID,
         )
 
     def test_requires_payment_confirmation(self):
         order = Order.objects.create(
-            full_name="Pending User",
-            email="p@example.com",
+            customer_name="Pending User",
+            customer_email="p@example.com",
             phone="5555",
             address="Nowhere",
             total_amount=10,

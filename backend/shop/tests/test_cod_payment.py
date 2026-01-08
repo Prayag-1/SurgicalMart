@@ -19,8 +19,8 @@ class CODPaymentTests(APITestCase):
         )
         self.client = APIClient()
         self.order = Order.objects.create(
-            full_name="Test User",
-            email="test@example.com",
+            customer_name="Test User",
+            customer_email="test@example.com",
             phone="123456",
             address="Somewhere",
             total_amount=50,
@@ -32,7 +32,7 @@ class CODPaymentTests(APITestCase):
         res = self.client.post(url, {}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.order.refresh_from_db()
-        self.assertEqual(self.order.payment_status, Order.PAYMENT_STATUS_CONFIRMED)
+        self.assertEqual(self.order.payment_status, Order.PAYMENT_STATUS_PAID)
         self.assertTrue(Invoice.objects.filter(order=self.order).exists())
         self.assertGreaterEqual(OrderAdminNote.objects.filter(order=self.order).count(), 1)
 
@@ -51,7 +51,7 @@ class CODPaymentTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_idempotent_on_confirmed(self):
-        self.order.payment_status = Order.PAYMENT_STATUS_CONFIRMED
+        self.order.payment_status = Order.PAYMENT_STATUS_PAID
         self.order.save(update_fields=["payment_status"])
         self.client.force_authenticate(user=self.staff)
         url = f"/api/admin/orders/{self.order.id}/payment-received/"
@@ -71,7 +71,7 @@ class CODPaymentTests(APITestCase):
     def test_invoice_generation_endpoint(self):
         self.client.force_authenticate(user=self.staff)
         # Mark payment confirmed
-        self.order.payment_status = Order.PAYMENT_STATUS_CONFIRMED
+        self.order.payment_status = Order.PAYMENT_STATUS_PAID
         self.order.save(update_fields=["payment_status"])
 
         url = f"/api/admin/orders/{self.order.id}/invoice/"

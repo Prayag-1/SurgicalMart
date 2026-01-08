@@ -37,8 +37,8 @@ class AdminDashboardTests(APITestCase):
 
         now = timezone.now()
         Order.objects.create(
-            full_name="Dr. Admin",
-            email="doc@example.com",
+            customer_name="Dr. Admin",
+            customer_email="doc@example.com",
             phone="123456789",
             address="Test",
             total_amount=Decimal("150.00"),
@@ -48,14 +48,14 @@ class AdminDashboardTests(APITestCase):
             created_at=now,
         )
         Order.objects.create(
-            full_name="Customer",
-            email="c@example.com",
+            customer_name="Customer",
+            customer_email="c@example.com",
             phone="987654321",
             address="Test",
             total_amount=Decimal("200.00"),
             status=Order.STATUS_CONFIRMED,
             payment_method=Order.PAYMENT_METHOD_COD,
-            payment_status=Order.PAYMENT_STATUS_CONFIRMED,
+            payment_status=Order.PAYMENT_STATUS_PAID,
             created_at=now,
         )
 

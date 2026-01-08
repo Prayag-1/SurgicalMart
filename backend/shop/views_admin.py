@@ -1,3 +1,5 @@
+import csv
+
 from rest_framework import viewsets, status, filters
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -5,12 +7,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Sum, F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.http import HttpResponse
 
-from .models import Order, Product, OrderAdminNote, Category, Brand, AdminSetting
+from .models import Order, Product, OrderAdminNote, Category, Brand, AdminSetting, HomepageSection, HeroSlide
 from .serializers import (
     AdminOrderSerializer,
     ProductSerializer,
@@ -23,6 +27,8 @@ from .serializers import (
     BrandWriteSerializer,
     AdminSettingSerializer,
     ShipmentSerializer,
+    HomepageSettingsSerializer,
+    HeroSlideSerializer,
 )
 from .permissions import IsAdminUser
 from .services import (
@@ -38,10 +44,20 @@ from .services import (
 # ADMIN ORDER MANAGEMENT
 # -------------------------------
 class AdminOrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().order_by("-created_at")
+    queryset = (
+        Order.objects.all()
+        .select_related()
+        .prefetch_related("items__product", "status_audits", "admin_notes", "invoice")
+        .order_by("-created_at")
+    )
     serializer_class = AdminOrderSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsAdminUser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["status", "payment_status", "payment_method"]
+    search_fields = ["order_number", "customer_name", "customer_email", "phone"]
+    ordering_fields = ["created_at", "total_amount", "status"]
+    ordering = ["-created_at"]
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def create(self, request, *args, **kwargs):
@@ -50,14 +66,51 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="orders.csv"'
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Order Number",
+                "Customer Name",
+                "Customer Email",
+                "Phone",
+                "Status",
+                "Payment Status",
+                "Payment Method",
+                "Total Amount",
+                "Created At",
+                "Shipped At",
+            ]
+        )
+        for order in queryset:
+            writer.writerow(
+                [
+                    order.order_number,
+                    order.customer_name,
+                    order.customer_email,
+                    order.phone,
+                    order.status,
+                    order.payment_status,
+                    order.payment_method,
+                    order.total_amount,
+                    order.created_at.isoformat(),
+                    order.shipped_at.isoformat() if order.shipped_at else "",
+                ]
+            )
+        return response
+
     @action(detail=True, methods=["post"], url_path="status")
     def update_status(self, request, pk=None):
-        to_status = request.data.get("to_status")
+        to_status = request.data.get("status") or request.data.get("to_status")
         reason = request.data.get("reason")
         meta = request.data.get("meta")
 
         if not to_status:
-            return Response({"detail": "to_status is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "status is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             order = change_order_status(
@@ -252,6 +305,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ["stock", "price", "created_at"]
     search_fields = ["name", "description", "sku"]
     filterset_fields = ["is_active", "category", "brand"]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
@@ -333,7 +387,9 @@ class AdminDashboardView(APIView):
             Order.objects.order_by("-created_at")
             .values(
                 "id",
-                "full_name",
+                "order_number",
+                "customer_name",
+                "customer_email",
                 "phone",
                 "total_amount",
                 "status",
@@ -342,7 +398,7 @@ class AdminDashboardView(APIView):
         )
 
         revenue_qs = Order.objects.filter(
-            payment_status=Order.PAYMENT_STATUS_CONFIRMED,
+            payment_status=Order.PAYMENT_STATUS_PAID,
             created_at__date__gte=start_month,
         )
         revenue_this_month = revenue_qs.aggregate(total=Sum("total_amount"))["total"] or 0
@@ -467,8 +523,52 @@ class BrandAdminViewSet(viewsets.ModelViewSet):
     filterset_fields = ["is_active", "featured"]
     search_fields = ["name", "slug", "description", "seo_keywords"]
     ordering_fields = ["name", "created_at"]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return BrandWriteSerializer
         return BrandSerializer
+
+
+# -------------------------------
+# HOMEPAGE SETTINGS
+# -------------------------------
+class HomepageSettingsView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_object(self):
+        obj, _ = HomepageSection.objects.get_or_create(id=1)
+        return obj
+
+    def get(self, request):
+        obj = self.get_object()
+        serializer = HomepageSettingsSerializer(obj, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request):
+        obj = self.get_object()
+        serializer = HomepageSettingsSerializer(
+            obj,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class HeroSlideViewSet(viewsets.ModelViewSet):
+    queryset = HeroSlide.objects.all().order_by("order", "id")
+    serializer_class = HeroSlideSerializer
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx

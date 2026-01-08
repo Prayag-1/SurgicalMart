@@ -13,6 +13,7 @@ from .views import (
     CartRemoveView,
     CartClearView,
     CheckoutView,
+    HomepageConfigView,
 )
 # -------------------------------
 # CUSTOMER ROUTES
@@ -31,4 +32,5 @@ urlpatterns = [
     path("cart/clear/", CartClearView.as_view(), name="cart-clear"),
 
     path("checkout/", CheckoutView.as_view(), name="checkout"),
+    path("homepage/", HomepageConfigView.as_view(), name="homepage-config"),
 ]

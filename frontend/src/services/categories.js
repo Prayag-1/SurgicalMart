@@ -1,96 +1,21 @@
-import { clearTokens, getAccessToken } from '../utils/tokenStorage'
+import { apiRequest, buildQueryString } from './apiClient'
 
-const BASE_URL = 'http://127.0.0.1:8000'
+export const fetchCategoryTree = async () =>
+  apiRequest(`/api/admin/categories/tree/`, { method: 'GET' })
 
-const getTokenOrThrow = () => {
-  const token = getAccessToken()
-  if (!token) {
-    clearTokens()
-    throw new Error('Unauthorized. Please log in again.')
-  }
-  return token
-}
+export const fetchCategories = async (params = {}) =>
+  apiRequest(`/api/admin/categories/${buildQueryString(params)}`, { method: 'GET' })
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${getTokenOrThrow()}`,
-})
+export const fetchCategory = async (id) =>
+  apiRequest(`/api/admin/categories/${id}/`, { method: 'GET' })
 
-const handleResponse = async (response) => {
-  const payload = await response.json().catch(() => ({}))
+export const createCategory = async (payload) =>
+  apiRequest(`/api/admin/categories/`, { method: 'POST', body: payload })
 
-  if (response.status === 401 || response.status === 403) {
-    clearTokens()
-    throw new Error('Unauthorized. Please log in again.')
-  }
-
-  if (!response.ok) {
-    const detail = payload.detail || 'Unable to complete the request'
-    const err = new Error(detail)
-    err.fields = payload
-    throw err
-  }
-
-  return payload
-}
-
-const toQueryString = (params = {}) => {
-  const search = new URLSearchParams()
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') return
-    search.append(key, value)
-  })
-  const qs = search.toString()
-  return qs ? `?${qs}` : ''
-}
-
-export const fetchCategoryTree = async () => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/tree/`, {
-    method: 'GET',
-    headers: authHeaders(),
-  })
-  return handleResponse(res)
-}
-
-export const fetchCategories = async (params = {}) => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/${toQueryString(params)}`, {
-    method: 'GET',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-  })
-  return handleResponse(res)
-}
-
-export const fetchCategory = async (id) => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/${id}/`, {
-    method: 'GET',
-    headers: authHeaders(),
-  })
-  return handleResponse(res)
-}
-
-export const createCategory = async (payload) => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/`, {
-    method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return handleResponse(res)
-}
-
-export const updateCategory = async (id, payload) => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/${id}/`, {
-    method: 'PATCH',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return handleResponse(res)
-}
+export const updateCategory = async (id, payload) =>
+  apiRequest(`/api/admin/categories/${id}/`, { method: 'PATCH', body: payload })
 
 export const deleteCategory = async (id) => {
-  const res = await fetch(`${BASE_URL}/api/admin/categories/${id}/`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-
-  if (res.status === 204) return true
-  return handleResponse(res)
+  const res = await apiRequest(`/api/admin/categories/${id}/`, { method: 'DELETE' })
+  return res ?? true
 }
