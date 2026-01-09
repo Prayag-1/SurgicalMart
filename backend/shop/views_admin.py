@@ -1,5 +1,7 @@
 import csv
 
+import logging
+
 from rest_framework import viewsets, status, filters
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -311,6 +313,15 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update"]:
             return ProductWriteSerializer
         return ProductSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logging.getLogger(__name__).warning("Product create validation failed: %s", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=["patch"], url_path="stock")
     def update_stock(self, request, pk=None):

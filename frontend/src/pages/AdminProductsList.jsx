@@ -332,3 +332,4 @@ const th = { textAlign: 'left', padding: '10px 8px', fontSize: 13, color: '#cbd5
 const td = { padding: '12px 8px', fontSize: 14, color: '#e2e8f0', borderBottom: '1px solid #0f172a' }
 
 export default AdminProductsList
+

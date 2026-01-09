@@ -1,12 +1,16 @@
 const ACCESS_TOKEN_KEY = 'accessToken'
 const REFRESH_TOKEN_KEY = 'refreshToken'
 
-export const setTokens = ({ access, refresh }) => {
+export const setAccessToken = (access) => {
   localStorage.setItem(ACCESS_TOKEN_KEY, access)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('token-change'))
   }
+}
+
+export const setTokens = ({ access, refresh }) => {
+  setAccessToken(access)
+  localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
 }
 
 export const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY)

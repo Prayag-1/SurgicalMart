@@ -206,19 +206,33 @@ class ProductSerializer(serializers.ModelSerializer):
 # PRODUCT WRITE SERIALIZER (ADMIN)
 # --------------------------
 class ProductWriteSerializer(serializers.ModelSerializer):
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source="category",
+        required=True,
+        allow_null=False,
+    )
+    brand_id = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(),
+        source="brand",
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
     class Meta:
         model = Product
         fields = [
             "id",
             "name",
             "slug",
-            "category",
-            "brand",
+            "sku",
+            "price",
+            "stock",
             "short_description",
             "description",
-            "price",
-            "sku",
-            "stock",
+            "category_id",
+            "brand_id",
             "image",
             "is_featured",
             "is_active",
@@ -226,15 +240,23 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "seo_description",
             "seo_keywords",
         ]
+        extra_kwargs = {
+            "name": {"required": True},
+            "price": {"required": True},
+            "description": {"required": True},
+        }
 
     def validate_slug(self, value):
         slug_value = slugify(value or "")
-        if not slug_value:
+        if not slug_value and not (self.initial_data.get("name") or getattr(self.instance, "name", None)):
             raise serializers.ValidationError("Slug is required.")
+        if not slug_value and self.initial_data.get("name"):
+            slug_value = slugify(self.initial_data.get("name") or "")
+
         qs = Product.objects.all()
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
-        if qs.filter(slug__iexact=slug_value).exists():
+        if slug_value and qs.filter(slug__iexact=slug_value).exists():
             raise serializers.ValidationError("Slug must be unique.")
         return slug_value
 
@@ -247,20 +269,43 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         return value
 
     def validate_price(self, value):
+        if value is None:
+            raise serializers.ValidationError("Price is required.")
         if value < 0:
             raise serializers.ValidationError("Price must be greater than or equal to 0.")
         return value
 
     def validate_stock(self, value):
+        if value is None:
+            return 0
         if value < 0:
             raise serializers.ValidationError("Stock must be greater than or equal to 0.")
         return value
 
     def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if not attrs.get("slug") and attrs.get("name"):
-            attrs["slug"] = slugify(attrs["name"])
-        return attrs
+        errors = {}
+
+        name = attrs.get("name") or getattr(self.instance, "name", None)
+        if not name and not self.partial:
+            errors["name"] = ["Name is required."]
+
+        category = attrs.get("category") or getattr(self.instance, "category", None)
+        if not category and not self.partial:
+            errors["category_id"] = ["Category is required."]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        # Auto-generate slug if missing
+        if not attrs.get("slug") and name:
+            attrs["slug"] = slugify(name)
+
+        return super().validate(attrs)
+
+    def create(self, validated_data):
+        if not validated_data.get("slug") and validated_data.get("name"):
+            validated_data["slug"] = slugify(validated_data["name"])
+        return super().create(validated_data)
 
 
 # --------------------------

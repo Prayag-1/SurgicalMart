@@ -1,4 +1,4 @@
-import { clearTokens, getAccessToken } from '../utils/tokenStorage'
+import { clearTokens, getAccessToken, getRefreshToken, setAccessToken } from '../utils/tokenStorage'
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
@@ -8,6 +8,7 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
     this.payload = payload
+    this.fields = payload
     this.code = isUnauthorized ? 'unauthorized' : payload.code || null
     this.isUnauthorized = isUnauthorized
   }
@@ -29,33 +30,80 @@ export const buildQueryString = (params = {}) => {
   return qs ? `?${qs}` : ''
 }
 
+const refreshAccessToken = async () => {
+  const refresh = getRefreshToken()
+  if (!refresh) return null
+
+  const response = await fetch(`${BASE_URL}/api/auth/refresh/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  })
+
+  if (!response.ok) {
+    clearTokens()
+    return null
+  }
+
+  const data = await response.json().catch(() => ({}))
+  if (data.access) {
+    setAccessToken(data.access)
+    return data.access
+  }
+
+  clearTokens()
+  return null
+}
+
+const isUnauthorizedStatus = (status) => status === 401 || status === 403
+
 export const apiRequest = async (
   path,
   { method = 'GET', body = undefined, headers = {}, useJson = true, requireAuth = true, raw = false } = {},
 ) => {
-  const token = getAccessToken()
+  const serializedBody = serializeBody(body, useJson)
+  let accessToken = getAccessToken()
 
-  if (requireAuth && !token) {
-    clearTokens()
-    throw new ApiError('Unauthorized. Please log in again.', 401, {}, true)
+  if (requireAuth && !accessToken) {
+    accessToken = await refreshAccessToken()
+    if (!accessToken) {
+      throw new ApiError('Unauthorized. Please log in again.', 401, {}, true)
+    }
   }
 
-  const finalHeaders = {
-    ...(useJson && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-    ...(requireAuth && token ? { Authorization: `Bearer ${token}` } : {}),
-    ...headers,
+  const doFetch = async (token) => {
+    const finalHeaders = {
+      ...(useJson && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...(requireAuth && token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    }
+
+    return fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: finalHeaders,
+      body: serializedBody,
+    })
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: finalHeaders,
-    body: serializeBody(body, useJson),
-  })
+  let response = await doFetch(accessToken)
+
+  if (isUnauthorizedStatus(response.status) && requireAuth) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      response = await doFetch(refreshed)
+    }
+  }
 
   if (raw) {
-    if (response.status === 401 || response.status === 403) {
-      clearTokens()
+    if (isUnauthorizedStatus(response.status) && requireAuth) {
       throw new ApiError('Unauthorized. Please log in again.', response.status, {}, true)
+    }
+    if (!response.ok) {
+      const rawPayload = await response
+        .clone()
+        .json()
+        .catch(() => ({}))
+      throw new ApiError('Unable to complete the request', response.status, rawPayload, false)
     }
     return response
   }
@@ -67,9 +115,9 @@ export const apiRequest = async (
     payload = {}
   }
 
-  if (response.status === 401 || response.status === 403) {
+  if (isUnauthorizedStatus(response.status) && requireAuth) {
     clearTokens()
-    throw new ApiError('Unauthorized. Please log in again.', response.status, payload, true)
+    throw new ApiError(payload.detail || 'Unauthorized. Please log in again.', response.status, payload, true)
   }
 
   if (!response.ok) {

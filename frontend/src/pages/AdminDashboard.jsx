@@ -171,7 +171,7 @@ function AdminDashboard() {
                   <div>
                     <div style={{ fontWeight: 700, color: '#f8fafc' }}>{order.order_number || `#${order.id}`}</div>
                     <div style={{ color: '#94a3b8', fontSize: 13 }}>
-                      {order.customer_name || 'Customer'} · {order.phone || '—'}
+                      {order.customer_name || 'Customer'} - {order.phone || 'N/A'}
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 12 }}>{formatDate(order.created_at)}</div>
                   </div>

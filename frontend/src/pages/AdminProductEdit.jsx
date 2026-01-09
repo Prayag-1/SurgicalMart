@@ -59,6 +59,7 @@ function AdminProductEdit() {
   const [brands, setBrands] = useState([])
 
   const flatCategories = useMemo(() => flattenCategories(categories), [categories])
+  const getFieldError = (key) => fieldErrors[key] || fieldErrors[`${key}_id`]
 
   const loadOptions = async () => {
     const [cats, brs] = await Promise.all([fetchCategoryTree(), fetchBrands()])
@@ -133,12 +134,12 @@ function AdminProductEdit() {
       name: form.name,
       slug: form.slug,
       sku: form.sku,
-      price: form.price === '' ? '' : Number(form.price),
-      stock: form.stock === '' ? 0 : Number(form.stock),
+      price: form.price === '' ? null : Number(form.price),
+      stock: form.stock === '' ? null : Number(form.stock),
       description: form.description,
       short_description: form.short_description || '',
-      category: form.category || null,
-      brand: form.brand || null,
+      category_id: form.category ? Number(form.category) : null,
+      brand_id: form.brand ? Number(form.brand) : null,
       is_featured: form.is_featured,
       is_active: form.is_active,
       seo_title: form.seo_title || '',
@@ -263,13 +264,13 @@ function AdminProductEdit() {
             <label style={label}>
               <span>Name</span>
               <input value={form.name} onChange={(e) => handleNameChange(e.target.value)} style={input} />
-              {fieldErrors.name ? <FieldError msg={fieldErrors.name} /> : null}
+              {getFieldError('name') ? <FieldError msg={getFieldError('name')} /> : null}
             </label>
 
             <label style={label}>
               <span>Slug</span>
               <input value={form.slug} onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))} style={input} />
-              {fieldErrors.slug ? <FieldError msg={fieldErrors.slug} /> : null}
+              {getFieldError('slug') ? <FieldError msg={getFieldError('slug')} /> : null}
             </label>
           </div>
 
@@ -277,7 +278,7 @@ function AdminProductEdit() {
             <label style={label}>
               <span>SKU</span>
               <input value={form.sku} onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))} style={input} />
-              {fieldErrors.sku ? <FieldError msg={fieldErrors.sku} /> : null}
+              {getFieldError('sku') ? <FieldError msg={getFieldError('sku')} /> : null}
             </label>
 
             <label style={label}>
@@ -289,7 +290,7 @@ function AdminProductEdit() {
                 onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
                 style={input}
               />
-              {fieldErrors.price ? <FieldError msg={fieldErrors.price} /> : null}
+              {getFieldError('price') ? <FieldError msg={getFieldError('price')} /> : null}
             </label>
           </div>
 
@@ -302,7 +303,7 @@ function AdminProductEdit() {
                 onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))}
                 style={input}
               />
-              {fieldErrors.stock ? <FieldError msg={fieldErrors.stock} /> : null}
+              {getFieldError('stock') ? <FieldError msg={getFieldError('stock')} /> : null}
             </label>
 
             <label style={label}>
@@ -319,7 +320,7 @@ function AdminProductEdit() {
                   </option>
                 ))}
               </select>
-              {fieldErrors.category ? <FieldError msg={fieldErrors.category} /> : null}
+              {getFieldError('category') ? <FieldError msg={getFieldError('category')} /> : null}
             </label>
           </div>
 
@@ -338,7 +339,7 @@ function AdminProductEdit() {
                   </option>
                 ))}
               </select>
-              {fieldErrors.brand ? <FieldError msg={fieldErrors.brand} /> : null}
+              {getFieldError('brand') ? <FieldError msg={getFieldError('brand')} /> : null}
             </label>
 
             <label style={label}>
@@ -348,7 +349,7 @@ function AdminProductEdit() {
                 onChange={(e) => setForm((p) => ({ ...p, short_description: e.target.value }))}
                 style={input}
               />
-              {fieldErrors.short_description ? <FieldError msg={fieldErrors.short_description} /> : null}
+              {getFieldError('short_description') ? <FieldError msg={getFieldError('short_description')} /> : null}
             </label>
           </div>
 
@@ -359,7 +360,7 @@ function AdminProductEdit() {
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               style={{ ...input, minHeight: 120 }}
             />
-            {fieldErrors.description ? <FieldError msg={fieldErrors.description} /> : null}
+            {getFieldError('description') ? <FieldError msg={getFieldError('description')} /> : null}
           </label>
 
           <div style={twoCol}>
@@ -390,7 +391,7 @@ function AdminProductEdit() {
                 onChange={(e) => setForm((p) => ({ ...p, seo_title: e.target.value }))}
                 style={input}
               />
-              {fieldErrors.seo_title ? <FieldError msg={fieldErrors.seo_title} /> : null}
+              {getFieldError('seo_title') ? <FieldError msg={getFieldError('seo_title')} /> : null}
             </label>
 
             <label style={label}>
@@ -400,7 +401,7 @@ function AdminProductEdit() {
                 onChange={(e) => setForm((p) => ({ ...p, seo_keywords: e.target.value }))}
                 style={input}
               />
-              {fieldErrors.seo_keywords ? <FieldError msg={fieldErrors.seo_keywords} /> : null}
+              {getFieldError('seo_keywords') ? <FieldError msg={getFieldError('seo_keywords')} /> : null}
             </label>
           </div>
 
@@ -411,7 +412,7 @@ function AdminProductEdit() {
               onChange={(e) => setForm((p) => ({ ...p, seo_description: e.target.value }))}
               style={{ ...input, minHeight: 90 }}
             />
-            {fieldErrors.seo_description ? <FieldError msg={fieldErrors.seo_description} /> : null}
+            {getFieldError('seo_description') ? <FieldError msg={getFieldError('seo_description')} /> : null}
           </label>
 
           <label style={label}>
@@ -421,7 +422,7 @@ function AdminProductEdit() {
               accept="image/*"
               onChange={(e) => setForm((p) => ({ ...p, image: e.target.files?.[0] || null }))}
             />
-            {fieldErrors.image ? <FieldError msg={fieldErrors.image} /> : null}
+            {getFieldError('image') ? <FieldError msg={getFieldError('image')} /> : null}
           </label>
 
           {error ? <p style={{ color: 'red' }}>{error}</p> : null}

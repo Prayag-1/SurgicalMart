@@ -12,11 +12,13 @@ import {
   updateSlide,
 } from '../services/settings'
 
+const pageStyle = { padding: 28, display: 'grid', gap: 24 }
+
 const card = {
   background: '#0f182b',
   border: '1px solid #1f2a44',
   borderRadius: 14,
-  padding: 16,
+  padding: 20,
   color: '#e2e8f0',
   boxShadow: '0 18px 40px rgba(0,0,0,0.18)',
 }
@@ -47,6 +49,18 @@ const ghostButton = {
   background: '#0b1324',
   color: '#e2e8f0',
   fontWeight: 600,
+  cursor: 'pointer',
+}
+
+const iconButton = {
+  width: 36,
+  height: 36,
+  display: 'inline-grid',
+  placeItems: 'center',
+  borderRadius: 10,
+  border: '1px solid #1f2a44',
+  background: '#0b1324',
+  color: '#e2e8f0',
   cursor: 'pointer',
 }
 
@@ -219,19 +233,16 @@ function AdminSettings() {
   if (loading) return <div style={{ padding: 24, color: '#e2e8f0' }}>Loading settings...</div>
 
   return (
-    <div style={{ padding: 24, display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+    <div style={pageStyle}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <p style={{ margin: 0, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 12 }}>
             Homepage
           </p>
-          <h2 style={{ margin: 0, color: '#f8fafc' }}>Content Settings</h2>
-          <p style={{ margin: '4px 0 0', color: '#cbd5e1' }}>Control hero slider, featured sections, and listings.</p>
+          <h1 style={{ margin: 0, color: '#f8fafc' }}>Content Settings</h1>
+          <p style={{ margin: '6px 0 0', color: '#cbd5e1' }}>Control hero slider, featured sections, and listings.</p>
         </div>
-        <button type="button" onClick={handleSaveConfig} disabled={saving} style={primaryButton}>
-          {saving ? 'Saving...' : 'Save changes'}
-        </button>
-      </div>
+      </header>
 
       {error ? <p style={{ margin: 0, color: '#f87171' }}>{error}</p> : null}
       {message ? <p style={{ margin: 0, color: '#34d399' }}>{message}</p> : null}
@@ -260,74 +271,87 @@ function AdminSettings() {
         />
       </div>
 
-      <div style={{ ...card, display: 'grid', gap: 12 }}>
+      <div style={{ ...card, display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div>
             <h3 style={{ margin: 0, color: '#f8fafc' }}>Hero slider</h3>
-            <p style={{ margin: 0, color: '#94a3b8' }}>Upload slides and link to key destinations.</p>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>Upload slides and link to key destinations.</p>
           </div>
+          <button type="button" onClick={handleAddSlide} disabled={slideSaving} style={primaryButton}>
+            {slideSaving ? 'Uploading...' : 'Add slide'}
+          </button>
         </div>
 
         <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-            {slides.map((slide) => (
-              <div
-                key={slide.id}
-                style={{
-                  border: '1px solid #1f2a44',
-                  borderRadius: 12,
-                  padding: 12,
-                  background: '#0b1324',
-                  display: 'grid',
-                  gap: 8,
-                }}
-              >
+          {slides.length === 0 ? (
+            <p style={{ margin: 0, color: '#94a3b8' }}>No slides added yet.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {slides.map((slide) => (
                 <div
+                  key={slide.id}
                   style={{
-                    height: 140,
-                    borderRadius: 10,
-                    background: '#0f172a',
                     border: '1px solid #1f2a44',
-                    overflow: 'hidden',
+                    borderRadius: 12,
+                    padding: 12,
+                    background: '#0b1324',
+                    display: 'grid',
+                    gridTemplateColumns: '140px 1fr auto',
+                    gap: 12,
+                    alignItems: 'center',
                   }}
                 >
-                  {slide.image_url || slide.image ? (
-                    <img
-                      src={slide.image_url || slide.image}
-                      alt="Slide"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div style={{ color: '#94a3b8', display: 'grid', placeItems: 'center', height: '100%' }}>No image</div>
-                  )}
+                  <div
+                    style={{
+                      height: 110,
+                      borderRadius: 10,
+                      background: '#0f172a',
+                      border: '1px solid #1f2a44',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {slide.image_url || slide.image ? (
+                      <img
+                        src={slide.image_url || slide.image}
+                        alt="Slide"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{ color: '#94a3b8', display: 'grid', placeItems: 'center', height: '100%' }}>No image</div>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <p style={{ margin: 0, color: '#cbd5e1', fontSize: 13 }}>Link: {slide.link_url || 'Not set'}</p>
+                    <label style={{ ...labelRow, color: '#cbd5e1' }}>
+                      <span>Order</span>
+                      <input
+                        type="number"
+                        value={slide.order}
+                        onChange={(e) => handleUpdateSlide(slide.id, { order: Number(e.target.value) })}
+                        style={{ ...input, width: 90 }}
+                      />
+                    </label>
+                    <label style={{ ...labelRow, color: '#cbd5e1' }}>
+                      <input
+                        type="checkbox"
+                        checked={slide.is_active}
+                        onChange={(e) => handleUpdateSlide(slide.id, { is_active: e.target.checked })}
+                      />
+                      <span>Active</span>
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <button type="button" aria-label="Delete slide" onClick={() => handleDeleteSlide(slide.id)} style={iconButton}>
+                      ×
+                    </button>
+                  </div>
                 </div>
-                <p style={{ margin: 0, color: '#cbd5e1', fontSize: 13 }}>Link: {slide.link_url || 'Not set'}</p>
-                <label style={{ ...labelRow, color: '#cbd5e1' }}>
-                  <span>Order</span>
-                  <input
-                    type="number"
-                    value={slide.order}
-                    onChange={(e) => handleUpdateSlide(slide.id, { order: Number(e.target.value) })}
-                    style={{ ...input, width: 90 }}
-                  />
-                </label>
-                <label style={{ ...labelRow, color: '#cbd5e1' }}>
-                  <input
-                    type="checkbox"
-                    checked={slide.is_active}
-                    onChange={(e) => handleUpdateSlide(slide.id, { is_active: e.target.checked })}
-                  />
-                  <span>Active</span>
-                </label>
-                <button type="button" onClick={() => handleDeleteSlide(slide.id)} style={ghostButton}>
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          <div style={{ ...card, borderStyle: 'dashed', borderColor: '#1f2a44', borderWidth: 1, background: '#0b1324' }}>
-            <h4 style={{ margin: '0 0 8px', color: '#f8fafc' }}>Add slide</h4>
+          <div style={{ border: '1px solid #1f2a44', borderRadius: 12, padding: 14, background: '#0b1324', display: 'grid', gap: 10 }}>
+            <h4 style={{ margin: 0, color: '#f8fafc' }}>Add slide</h4>
             <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <label style={label}>
                 <span>Link URL</span>
@@ -356,11 +380,14 @@ function AdminSettings() {
                 onChange={(e) => setSlideForm((prev) => ({ ...prev, image: e.target.files?.[0] || null }))}
               />
             </label>
-            <button type="button" onClick={handleAddSlide} disabled={slideSaving} style={primaryButton}>
-              {slideSaving ? 'Uploading...' : 'Add slide'}
-            </button>
           </div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button type="button" onClick={handleSaveConfig} disabled={saving} style={primaryButton}>
+          {saving ? 'Saving...' : 'Save changes'}
+        </button>
       </div>
 
       {modalType ? (
